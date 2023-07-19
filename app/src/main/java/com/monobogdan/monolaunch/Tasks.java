@@ -1,5 +1,6 @@
 package com.monobogdan.monolaunch;
 
+import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -9,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,7 +31,7 @@ public class Tasks extends ListView {
     class AppTask
     {
         public String name;
-
+        public String packageName;
         public Bitmap icon;
         public int id;
         public int memUsage;
@@ -66,6 +68,7 @@ public class Tasks extends ListView {
                 return 0;
             }
 
+            @SuppressLint("MissingInflatedId")
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
                 AppTask task = tasks.get(position);
@@ -89,7 +92,7 @@ public class Tasks extends ListView {
         tasks.clear();
 
         for (ActivityManager.RunningTaskInfo rt :
-             tInfo) {
+                tInfo) {
             try {
                 AppTask appInfo = new AppTask();
                 PackageInfo pacInfo = pacMan.getPackageInfo(rt.topActivity.getPackageName(), 0);
@@ -100,6 +103,7 @@ public class Tasks extends ListView {
                 appInfo.id = rt.id;
                 appInfo.icon = ((BitmapDrawable) pacInfo.applicationInfo.loadIcon(pacMan)).getBitmap();
                 appInfo.name = pacMan.getApplicationLabel(pacInfo.applicationInfo).toString();
+                appInfo.packageName=pacInfo.packageName;
 
                 tasks.add(appInfo);
             }
@@ -121,12 +125,17 @@ public class Tasks extends ListView {
         }
         if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER)
         {
-            PACKAGE_NAME = getContext().getPackageName();
-  /*          Intent intent = new Intent(Intent.ACTION_MAIN);
-            intent.setComponent(new ComponentName = PACKAGE_NAME);
-            launcher.startActivity(intent); */
+            Intent open = getContext().getPackageManager().getLaunchIntentForPackage(tasks.get(getSelectedItemPosition()).packageName);
+            if (open != null) {
+                open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(open);
+            } else {
+                Log.d("TAG","לא נמצא");
+                // האפליקציה לא נמצאה, ניתן לטפל בזה כרצונך
+            }
         }
 
         return super.onKeyUp(keyCode, event);
     }
 }
+
