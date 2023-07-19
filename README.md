@@ -25,9 +25,9 @@ and deicded to create this laucher and share it with everyone :)
 + D-pad down - Status bar
 + D-pad up - Task manager
 # To-do list
-+ Open apps from task manager
++ ~~Open apps from task manager~~ (DONE! 1.04 AIV)
 + Remove apps from task manager
-+ Show app name in task manager (in hebrew)
++ ~~Patch RTL~~ (DONE! 1.04 AIV)
 + Option to customize the hotkeys/apps in the menu
 
 # Installations
