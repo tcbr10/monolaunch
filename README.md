@@ -32,7 +32,7 @@ and deicded to create this laucher and share it with everyone :)
 
 # Installations
 
-Download and install latest APK from the (releases page)[https://github.com/AshiVered/monolaunch/releases]. 
+Download and install latest APK from the [releases page](https://github.com/AshiVered/monolaunch/releases). 
 
 
 # Support me
