@@ -1,3 +1,5 @@
+![image](https://raw.githubusercontent.com/AshiVered/support-israel-banner/main/assets/support-israel-banner.jpg)
+
 # Screenshots
 Main screen
 ![Main screen](/Screenshots/Screenshot_2023-07-09-01-15-38.png)
