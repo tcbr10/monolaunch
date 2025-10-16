@@ -1,5 +1,6 @@
 package com.monobogdan.monolaunch;
 
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
@@ -37,8 +38,10 @@ import android.widget.ImageView;
 import android.widget.ListAdapter;
 import android.widget.SimpleAdapter;
 
+
 import java.util.ArrayList;
 import java.util.List;
+
 
 class AppListView extends GridView
 {
@@ -49,34 +52,42 @@ class AppListView extends GridView
         public Intent intent;
     }
 
+
     class PackageManagerListener extends BroadcastReceiver
     {
+
 
         @Override
         public void onReceive(Context context, Intent intent) {
             fetchAppList();
             rebuildUI();
 
+
             System.gc();
         }
     }
+
 
     private Launcher parent;
     private ArrayList<AppInfo> installedApps;
     private int selectedItem;
     List<View> widgetList = new ArrayList<>();
 
+
     private void fetchAppList()
     {
         installedApps.clear();
+
 
         Intent filter = new Intent();
         filter.setAction(Intent.ACTION_MAIN);
         filter.addCategory(Intent.CATEGORY_LAUNCHER);
 
+
         PackageManager pm = getContext().getPackageManager();
         //List<ResolveInfo> apps = pm.queryIntentActivities(filter, 0);
         List<ApplicationInfo> apps = pm.getInstalledApplications(0);
+
 
         for (ApplicationInfo info:
                 apps) {
@@ -86,17 +97,21 @@ class AppListView extends GridView
             app.icon = info.loadIcon(pm);
             app.intent = pm.getLaunchIntentForPackage(info.packageName);
 
+
             if(app.intent == null)
                 continue;
+
 
             Log.i("Test", "fetchAppList: " + String.format("%s %s", app.name, app.intent));
             installedApps.add(app);
         }
     }
 
+
     public AppListView(Launcher launcher)
     {
         super(launcher.getApplicationContext());
+
 
         setOnItemSelectedListener(new OnItemSelectedListener() {
             @Override
@@ -104,8 +119,10 @@ class AppListView extends GridView
                 Log.i("", "onItemSelected: ");
             }
 
+
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
+
 
             }
         });
@@ -113,12 +130,45 @@ class AppListView extends GridView
         filter.addAction(Intent.ACTION_PACKAGE_ADDED);
         launcher.getApplicationContext().registerReceiver(new PackageManagerListener(), filter);
 
+
         parent = launcher;
+
 
         installedApps = new ArrayList<>();
         fetchAppList();
         rebuildUI();
     }
+
+    // Helper method to safely convert any Drawable to Bitmap
+    private Bitmap drawableToBitmap(Drawable drawable) {
+        if (drawable == null) {
+            return null;
+        }
+
+        // If it's already a BitmapDrawable, extract the bitmap directly
+        if (drawable instanceof BitmapDrawable) {
+            Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+            if (bitmap != null) {
+                return bitmap;
+            }
+        }
+
+        // For AdaptiveIconDrawable and other drawable types, render to a bitmap
+        int width = drawable.getIntrinsicWidth();
+        int height = drawable.getIntrinsicHeight();
+        
+        // Ensure valid dimensions
+        if (width <= 0) width = 48;
+        if (height <= 0) height = 48;
+
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+
+        return bitmap;
+    }
+
 
     private void rebuildUI()
     {
@@ -132,6 +182,7 @@ class AppListView extends GridView
                 if(view != null) {
                     view.animate().scaleX(1.1f).scaleY(1.2f).setDuration(100);
 
+
                     for (View v:
                          widgetList) {
                         if(v != view)
@@ -140,7 +191,9 @@ class AppListView extends GridView
                 }
 
 
+
             }
+
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
@@ -148,17 +201,24 @@ class AppListView extends GridView
             }
         });
 
+
         for(int i = 0; i < installedApps.size(); i++)
         {
             AppInfo app = installedApps.get(i);
+
 
             ImageButton button = new ImageButton(getContext());
             button.setBackgroundColor(Color.TRANSPARENT);
             button.setFocusable(true);
 
-            button.setImageBitmap(Bitmap.createScaledBitmap (((BitmapDrawable)app.icon).getBitmap(), 36, 36, false));
+            // FIXED: Use drawableToBitmap helper to safely convert any Drawable (including AdaptiveIconDrawable)
+            Bitmap iconBitmap = drawableToBitmap(app.icon);
+            if (iconBitmap != null) {
+                button.setImageBitmap(Bitmap.createScaledBitmap(iconBitmap, 36, 36, false));
+            }
             widgetList.add(button);
         }
+
 
         setAdapter(new BaseAdapter() {
             @Override
@@ -166,15 +226,18 @@ class AppListView extends GridView
                 return installedApps.size();
             }
 
+
             @Override
             public Object getItem(int position) {
                 return null;
             }
 
+
             @Override
             public long getItemId(int position) {
                 return 0;
             }
+
 
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
@@ -183,9 +246,11 @@ class AppListView extends GridView
         });
     }
 
+
     @Override
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
+
 
         Log.i("TAG", "onItemSelected: " + gainFocus);
         // HACK: When appList loses focus (possible bug in GridView), return focus to last element
@@ -193,21 +258,25 @@ class AppListView extends GridView
         requestFocus();
     }
 
+
     private int clamp(int a, int min, int max)
     {
         return a < min ? min : (a > max ? max : a);
     }
+
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER)
             getContext().startActivity(installedApps.get(getSelectedItemPosition()).intent);
 
+
         if(keyCode == KeyEvent.KEYCODE_BACK)
         {
             parent.switchToHome();
             return true;
         }
+
 
         return super.onKeyUp(keyCode, event);
     }
