@@ -4,15 +4,15 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="4px">
+    android:padding="8dp">
 
     <!-- TODO: Update blank fragment layout -->
 
 
     <ImageView
         android:id="@+id/app_icon"
-        android:layout_width="48px"
-        android:layout_height="48px"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:src="@drawable/cpu"
         tools:src="@drawable/cpu" />
 
@@ -21,10 +21,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_marginStart="5px"
-        android:layout_marginRight="5px"
-        android:layout_marginTop="5px"
+        android:layout_marginStart="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_marginTop="8dp"
         android:layout_toLeftOf="@id/app_icon"
+        android:textSize="14sp"
         android:text="@string/hello_blank_fragment" />
 
 </RelativeLayout>

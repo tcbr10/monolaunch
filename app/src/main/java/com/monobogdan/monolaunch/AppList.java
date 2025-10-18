@@ -74,38 +74,83 @@ class AppListView extends GridView
     List<View> widgetList = new ArrayList<>();
 
 
-    private void fetchAppList()
-    {
-        installedApps.clear();
+    // private void fetchAppList()
+    // {
+    //     installedApps.clear();
 
 
-        Intent filter = new Intent();
-        filter.setAction(Intent.ACTION_MAIN);
-        filter.addCategory(Intent.CATEGORY_LAUNCHER);
+    //     Intent filter = new Intent();
+    //     filter.setAction(Intent.ACTION_MAIN);
+    //     filter.addCategory(Intent.CATEGORY_LAUNCHER);
 
 
-        PackageManager pm = getContext().getPackageManager();
-        //List<ResolveInfo> apps = pm.queryIntentActivities(filter, 0);
-        List<ApplicationInfo> apps = pm.getInstalledApplications(0);
+    //     PackageManager pm = getContext().getPackageManager();
+    //     //List<ResolveInfo> apps = pm.queryIntentActivities(filter, 0);
+    //     List<ApplicationInfo> apps = pm.getInstalledApplications(0);
 
 
-        for (ApplicationInfo info:
-                apps) {
-            AppInfo app = new AppInfo();
-            ;
-            app.name = info.loadLabel(pm).toString();
-            app.icon = info.loadIcon(pm);
-            app.intent = pm.getLaunchIntentForPackage(info.packageName);
+    //     for (ApplicationInfo info:
+    //             apps) {
+    //         AppInfo app = new AppInfo();
+    //         ;
+    //         app.name = info.loadLabel(pm).toString();
+    //         app.icon = info.loadIcon(pm);
+    //         app.intent = pm.getLaunchIntentForPackage(info.packageName);
 
 
-            if(app.intent == null)
-                continue;
+    //         if(app.intent == null)
+    //             continue;
 
 
-            Log.i("Test", "fetchAppList: " + String.format("%s %s", app.name, app.intent));
-            installedApps.add(app);
-        }
+    //         Log.i("Test", "fetchAppList: " + String.format("%s %s", app.name, app.intent));
+    //         installedApps.add(app);
+    //     }
+    // }
+
+    private void fetchAppList() {
+    installedApps.clear();
+
+    Intent filter = new Intent(Intent.ACTION_MAIN);
+    filter.addCategory(Intent.CATEGORY_LAUNCHER);
+
+    PackageManager pm = getContext().getPackageManager();
+    
+    List<ResolveInfo> apps;
+    
+    // Handle Android 13+ (API 33) deprecated method
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        apps = pm.queryIntentActivities(
+            filter, 
+            PackageManager.ResolveInfoFlags.of(0)
+        );
+    } else {
+        apps = pm.queryIntentActivities(filter, 0);
     }
+
+    for (ResolveInfo resolveInfo : apps) {
+        AppInfo app = new AppInfo();
+        
+        app.name = resolveInfo.loadLabel(pm).toString();
+        app.icon = resolveInfo.loadIcon(pm);
+        app.intent = pm.getLaunchIntentForPackage(
+            resolveInfo.activityInfo.packageName
+        );
+
+        if (app.intent == null)
+            continue;
+
+        Log.i("Test", "fetchAppList: " + app.name + " " + app.intent);
+        installedApps.add(app);
+    }
+    
+    // Sort alphabetically
+    Collections.sort(installedApps, new Comparator<AppInfo>() {
+        @Override
+        public int compare(AppInfo a1, AppInfo a2) {
+            return a1.name.compareToIgnoreCase(a2.name);
+        }
+    });
+}
 
 
     public AppListView(Launcher launcher)
