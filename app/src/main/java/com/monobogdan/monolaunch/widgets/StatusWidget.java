@@ -19,6 +19,7 @@ import android.os.PowerManager;
 import android.provider.CallLog;
 import android.provider.Telephony;
 import android.telephony.TelephonyManager;
+import android.util.TypedValue;  // ADD THIS
 import android.view.View;
 
 import com.monobogdan.monolaunch.Launcher;
@@ -45,6 +46,22 @@ public class StatusWidget extends BroadcastReceiver {
     private String smsSender;
     private int dialCount;
 
+    private float dpToPx(float dp) {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            context.getResources().getDisplayMetrics()  // Use context, not getResources()
+        );
+    }
+
+    private float spToPx(float sp) {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            sp,
+            context.getResources().getDisplayMetrics()  // Use context, not getResources()
+        );
+    }
+
     public StatusWidget(Launcher.LauncherView view)
     {
         this.view = view;
@@ -53,10 +70,10 @@ public class StatusWidget extends BroadcastReceiver {
         smsSender = "";
 
         paint = new Paint();
-        paint.setTextSize(12.0f);
+        paint.setTextSize(spToPx(12));
         paint.setColor(Color.WHITE);
         paint.setAntiAlias(true);
-        paint.setShadowLayer(1, 1, 1, Color.DKGRAY);
+        paint.setShadowLayer(dpToPx(1), dpToPx(1), dpToPx(1), Color.DKGRAY);  // Fixed
 
         activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         memInfo = new ActivityManager.MemoryInfo();
@@ -138,9 +155,9 @@ public class StatusWidget extends BroadcastReceiver {
         int fac = (int)(3.14f / animFactor);
 
         cnvs.drawBitmap(bmp, matrix, paint);
-        cnvs.drawText(annotation, x + bmp.getWidth() + 5.0f, y + -paint.getFontMetrics().top, paint);
+        cnvs.drawText(annotation, x + bmp.getWidth() + dpToPx(5), y + -paint.getFontMetrics().top, paint);
 
-        return bmp.getHeight() + 5;
+        return bmp.getHeight() + dpToPx(5);
     }
 
     public float draw(Canvas cnvs, float y)
@@ -148,11 +165,10 @@ public class StatusWidget extends BroadcastReceiver {
         float animFactor = (float)Math.abs (Math.sin((new Date().getTime() - view.getTimeSinceStart()) * 0.005f));
         String senderStr = smsSender.length() > 0 ? "(" + smsSender + ")" : "";
 
-        y += drawStatusIcon(iconSMS.getBitmap(), 5.0f, y, 1.0f, String.valueOf(smsCount) + " " + context.getString(R.string.unread) + senderStr, cnvs);
-        y += drawStatusIcon(iconDial.getBitmap(), 5.0f, y, 1.0f, String.valueOf(dialCount) + " " +  context.getString(R.string.missed), cnvs);
-        y += drawStatusIcon(iconRAM.getBitmap(), 5.0f, y, 1.0f, memInfo.availMem / 1024 / 1024 + " " +  context.getString(R.string.ram), cnvs);
+        y += drawStatusIcon(iconSMS.getBitmap(), dpToPx(5), y, 1.0f, String.valueOf(smsCount) + " " + context.getString(R.string.unread) + senderStr, cnvs);
+        y += drawStatusIcon(iconDial.getBitmap(), dpToPx(5), y, 1.0f, String.valueOf(dialCount) + " " +  context.getString(R.string.missed), cnvs);
+        y += drawStatusIcon(iconRAM.getBitmap(), dpToPx(5), y, 1.0f, memInfo.availMem / 1024 / 1024 + " " +  context.getString(R.string.ram), cnvs);
 
         return y;
     }
-
 }

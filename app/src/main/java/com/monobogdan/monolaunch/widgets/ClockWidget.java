@@ -11,6 +11,22 @@ import android.view.View;
 import java.text.DateFormat;
 import java.util.Date;
 
+private float dpToPx(float dp) {
+            return TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                dp,
+                getResources().getDisplayMetrics()
+            );
+        }
+
+        private float spToPx(float sp) {
+            return TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                sp,
+                getResources().getDisplayMetrics()
+            );
+        }
+
 public class ClockWidget {
 
     private View parentView;
@@ -27,13 +43,13 @@ public class ClockWidget {
         bgPaint.setColor(Color.argb(99, 128, 128, 128));
 
         paint = new Paint();
-        paint.setTextSize(35);
+        paint.setTextSize(spToPx(35));
         paint.setColor(Color.WHITE);
         paint.setAntiAlias(true);
         paint.setTypeface(Typeface.MONOSPACE);
 
         datePaint = new Paint();
-        datePaint.setTextSize(12);
+        datePaint.setTextSize(spToPx(12));
         datePaint.setColor(Color.WHITE);
         datePaint.setAntiAlias(true);
         datePaint.setTypeface(Typeface.MONOSPACE);
