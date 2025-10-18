@@ -42,7 +42,7 @@ public class Tasks extends ListView {
     private int selectedIndex = 0;
 
     public Tasks(Launcher launcher) {
-        super(launcher.getApplicationContext());
+        super(launcher);  // USE ACTIVITY CONTEXT, NOT APPLICATION CONTEXT
         this.launcher = launcher;
         setBackgroundColor(Color.BLACK);
 
@@ -83,7 +83,7 @@ public class Tasks extends ListView {
 
                 // Highlight currently selected DPAD item
                 if (position == selectedIndex) {
-                    view.setBackgroundColor(Color.DKGRAY); // Highlight color
+                    view.setBackgroundColor(Color.DKGRAY);
                 } else {
                     view.setBackgroundColor(Color.TRANSPARENT);
                 }
@@ -99,7 +99,7 @@ public class Tasks extends ListView {
 
     public void updateTaskList() {
         tasks.clear();
-        selectedIndex = 0; // reset selection
+        selectedIndex = 0;
         PackageManager pacMan = getContext().getPackageManager();
 
         UsageStatsManager usageStatsManager = (UsageStatsManager) getContext().getSystemService(Context.USAGE_STATS_SERVICE);
@@ -131,16 +131,15 @@ public class Tasks extends ListView {
                 appInfo.name = pacMan.getApplicationLabel(pacInfo.applicationInfo).toString();
                 appInfo.packageName = pkgName;
                 
-                // FIXED: Safe icon handling for Android 8+ AdaptiveIconDrawable
+                // FIXED: Safe icon handling for AdaptiveIconDrawable
                 try {
                     Drawable appIcon = pacInfo.applicationInfo.loadIcon(pacMan);
                     Bitmap iconBitmap;
                     
                     if (appIcon instanceof BitmapDrawable) {
-                        // Already a BitmapDrawable - extract bitmap directly
                         iconBitmap = ((BitmapDrawable) appIcon).getBitmap();
                     } else {
-                        // AdaptiveIconDrawable or other drawable type - convert to bitmap
+                        // Handle AdaptiveIconDrawable and other types
                         int size = (int) (48 * getResources().getDisplayMetrics().density);
                         iconBitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
                         Canvas canvas = new Canvas(iconBitmap);
@@ -152,7 +151,6 @@ public class Tasks extends ListView {
                     
                 } catch (Exception e) {
                     Log.e("Tasks", "Error loading icon for " + pkgName + ": " + e.getMessage());
-                    // Create a simple placeholder bitmap if icon loading fails
                     appInfo.icon = Bitmap.createBitmap(48, 48, Bitmap.Config.ARGB_8888);
                 }
                 
@@ -166,9 +164,9 @@ public class Tasks extends ListView {
 
         adapterImpl.notifyDataSetChanged();
 
-        // Auto-select first item for DPAD navigation
+        // Auto-select first item
         if (!tasks.isEmpty()) {
-            post(() -> setSelection(selectedIndex));
+            setSelection(selectedIndex);
         }
     }
 
