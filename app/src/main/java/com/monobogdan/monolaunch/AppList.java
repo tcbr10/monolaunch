@@ -39,6 +39,14 @@ import android.widget.ListAdapter;
 import android.widget.SimpleAdapter;
 import android.os.Build;
 
+// new imports
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.text.TextUtils;
+import android.view.ViewGroup.LayoutParams;
+
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.ArrayList;
@@ -219,16 +227,38 @@ class AppListView extends GridView
 
     private void rebuildUI()
     {
+        // use density-aware sizing
+        final float density = getResources().getDisplayMetrics().density;
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+
+        // Choose icon size based on screen size: ensure visible on very small screens
+        int iconDp = 64; // base
+        // on tiny screens scale down a bit, otherwise keep or increase
+        int approxMinSideDp = Math.min(screenW, screenH) / (int)density;
+        if (approxMinSideDp <= 240) {
+            iconDp = 56;
+        } else if (approxMinSideDp >= 720) {
+            iconDp = 96;
+        }
+
+        final int iconSizePx = (int)(iconDp * density + 0.5f);
+        final int labelHeightPx = (int)(18 * density + 0.5f);
+        final int itemPadding = (int)(6 * density + 0.5f);
+
         setNumColumns(3);
-        setColumnWidth(48);
+        setColumnWidth(iconSizePx + itemPadding * 2);
         setClickable(true);
         setSelector(R.drawable.none);
+
+        // clear old widgets
+        widgetList.clear();
+
         setOnItemSelectedListener(new OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if(view != null) {
-                    view.animate().scaleX(1.1f).scaleY(1.2f).setDuration(100);
-
+                    view.animate().scaleX(1.08f).scaleY(1.08f).setDuration(120);
 
                     for (View v:
                          widgetList) {
@@ -244,26 +274,86 @@ class AppListView extends GridView
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
-                setSelection(installedApps.size() - 1);
+                if(installedApps.size() > 0)
+                    setSelection(installedApps.size() - 1);
             }
         });
 
 
         for(int i = 0; i < installedApps.size(); i++)
         {
-            AppInfo app = installedApps.get(i);
+            final AppInfo app = installedApps.get(i);
 
+            // container: vertical linear layout (icon above, label below)
+            LinearLayout container = new LinearLayout(getContext());
+            container.setOrientation(LinearLayout.VERTICAL);
+            container.setGravity(Gravity.CENTER_HORIZONTAL);
+            container.setPadding(itemPadding, itemPadding, itemPadding, itemPadding);
+            container.setLayoutParams(new LayoutParams(
+                    iconSizePx + itemPadding * 2,
+                    LayoutParams.WRAP_CONTENT
+            ));
+            container.setClickable(true);
+            container.setFocusable(true);
 
-            ImageButton button = new ImageButton(getContext());
-            button.setBackgroundColor(Color.TRANSPARENT);
-            button.setFocusable(true);
+            ImageView iv = new ImageView(getContext());
+            iv.setBackgroundColor(Color.TRANSPARENT);
+            iv.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(iconSizePx, iconSizePx);
+            ivLp.gravity = Gravity.CENTER_HORIZONTAL;
+            iv.setLayoutParams(ivLp);
 
-            // FIXED: Use drawableToBitmap helper to safely convert any Drawable (including AdaptiveIconDrawable)
+            // convert drawable -> bitmap then scale (keeps adaptive icons etc.)
             Bitmap iconBitmap = drawableToBitmap(app.icon);
             if (iconBitmap != null) {
-                button.setImageBitmap(Bitmap.createScaledBitmap(iconBitmap, 36, 36, false));
+                iv.setImageBitmap(Bitmap.createScaledBitmap(iconBitmap, iconSizePx, iconSizePx, true));
             }
-            widgetList.add(button);
+
+            TextView label = new TextView(getContext());
+            label.setText(app.name);
+            label.setSingleLine(true);
+            label.setEllipsize(TextUtils.TruncateAt.END);
+            label.setTextColor(Color.WHITE);
+            label.setGravity(Gravity.CENTER);
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            LinearLayout.LayoutParams tvLp = new LinearLayout.LayoutParams(
+                    LayoutParams.MATCH_PARENT, labelHeightPx
+            );
+            tvLp.topMargin = (int)(4 * density);
+            label.setLayoutParams(tvLp);
+
+            // modern clean look: subtle shadow (if desired) and transparent bg
+            label.setShadowLayer(1.0f, 0, 1.0f, Color.argb(120,0,0,0));
+
+            container.addView(iv);
+            container.addView(label);
+
+            // touch: launch app on click
+            final Intent launchIntent = app.intent;
+            container.setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    try {
+                        getContext().startActivity(launchIntent);
+                    } catch (Exception ex) {
+                        Log.e("AppListView", "Failed to launch " + app.name, ex);
+                    }
+                }
+            });
+
+            // focus scaling for D-pad / remote
+            container.setOnFocusChangeListener(new OnFocusChangeListener() {
+                @Override
+                public void onFocusChange(View v, boolean hasFocus) {
+                    if (hasFocus) {
+                        v.animate().scaleX(1.08f).scaleY(1.08f).setDuration(120);
+                    } else {
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(160);
+                    }
+                }
+            });
+
+            widgetList.add(container);
         }
 
 
@@ -291,6 +381,20 @@ class AppListView extends GridView
                 return widgetList.get(position);
             }
         });
+
+        // click support for grid items (redundant with container onClick, but helps touch on empty areas)
+        setOnItemClickListener(new OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parentView, View view, int position, long id) {
+                if (position >= 0 && position < installedApps.size()) {
+                    try {
+                        getContext().startActivity(installedApps.get(position).intent);
+                    } catch (Exception ex) {
+                        Log.e("AppListView", "Failed to launch on item click", ex);
+                    }
+                }
+            }
+        });
     }
 
 
@@ -301,7 +405,8 @@ class AppListView extends GridView
 
         Log.i("TAG", "onItemSelected: " + gainFocus);
         // HACK: When appList loses focus (possible bug in GridView), return focus to last element
-        setSelection(installedApps.size() - 1);
+        if (installedApps.size() > 0)
+            setSelection(installedApps.size() - 1);
         requestFocus();
     }
 
@@ -314,8 +419,12 @@ class AppListView extends GridView
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER)
-            getContext().startActivity(installedApps.get(getSelectedItemPosition()).intent);
+        if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            int sel = getSelectedItemPosition();
+            if(sel >= 0 && sel < installedApps.size()) {
+                getContext().startActivity(installedApps.get(sel).intent);
+            }
+        }
 
 
         if(keyCode == KeyEvent.KEYCODE_BACK)
