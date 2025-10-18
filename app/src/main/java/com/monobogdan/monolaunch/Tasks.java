@@ -1,8 +1,8 @@
 package com.monobogdan.monolaunch;
 
 import android.annotation.SuppressLint;
-import android.app.ActivityManager;
-import android.content.ComponentName;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -12,50 +12,41 @@ import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.util.Log;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class Tasks extends ListView {
 
-    public String PACKAGE_NAME;
-
-    class AppTask
-    {
+    class AppTask {
         public String name;
         public String packageName;
         public Bitmap icon;
         public int id;
-        public int memUsage;
     }
 
     private Launcher launcher;
     private BaseAdapter adapterImpl;
-    private ActivityManager activityManager;
     private ArrayList<AppTask> tasks;
 
-    public Tasks(Launcher launcher)
-    {
+    public Tasks(Launcher launcher) {
         super(launcher.getApplicationContext());
-
         this.launcher = launcher;
         setBackgroundColor(Color.BLACK);
 
         tasks = new ArrayList<>();
-        activityManager = (ActivityManager) launcher.getApplicationContext().getSystemService(Context.ACTIVITY_SERVICE);
 
         adapterImpl = new BaseAdapter() {
             @Override
             public int getCount() {
-                return tasks.size();
+                return tasks.isEmpty() ? 1 : tasks.size();
             }
 
             @Override
@@ -65,17 +56,25 @@ public class Tasks extends ListView {
 
             @Override
             public long getItemId(int position) {
-                return 0;
+                return position;
             }
 
             @SuppressLint("MissingInflatedId")
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
-                AppTask task = tasks.get(position);
+                if (tasks.isEmpty()) {
+                    TextView empty = new TextView(getContext());
+                    empty.setText("No apps available.\nPlease grant Usage Access in Settings.");
+                    empty.setTextColor(Color.WHITE);
+                    empty.setTextSize(18f);
+                    empty.setPadding(50, 50, 50, 50);
+                    return empty;
+                }
 
+                AppTask task = tasks.get(position);
                 View view = launcher.getLayoutInflater().inflate(R.layout.task, parent, false);
-                ((ImageView)view.findViewById(R.id.app_icon)).setImageBitmap(task.icon);
-                ((TextView)view.findViewById(R.id.app_name)).setText(task.name);
+                ((ImageView) view.findViewById(R.id.app_icon)).setImageBitmap(task.icon);
+                ((TextView) view.findViewById(R.id.app_name)).setText(task.name);
 
                 return view;
             }
@@ -84,32 +83,44 @@ public class Tasks extends ListView {
         setAdapter(adapterImpl);
     }
 
-    public void updateTaskList()
-    {
-        List<ActivityManager.RunningTaskInfo> tInfo = activityManager.getRunningTasks(10);
+    public void updateTaskList() {
+        tasks.clear();
         PackageManager pacMan = getContext().getPackageManager();
 
-        tasks.clear();
+        UsageStatsManager usageStatsManager = (UsageStatsManager) getContext().getSystemService(Context.USAGE_STATS_SERVICE);
+        long now = System.currentTimeMillis();
 
-        for (ActivityManager.RunningTaskInfo rt :
-                tInfo) {
+        List<UsageStats> stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY, now - 1000 * 60 * 60 * 24, now
+        );
+
+        if (stats == null || stats.isEmpty()) {
+            Log.d("Tasks", "No apps found or Usage Access not granted!");
+            adapterImpl.notifyDataSetChanged();
+            return;
+        }
+
+        Collections.sort(stats, (a, b) -> Long.compare(b.getLastTimeUsed(), a.getLastTimeUsed()));
+
+        int count = 0;
+        for (UsageStats us : stats) {
+            if (count >= 10) break;
+            String pkgName = us.getPackageName();
+
+            if (pkgName.equals("com.monobogdan.monolaunch") || pkgName.equals("com.sprd.simple.launcher"))
+                continue;
+
             try {
+                PackageInfo pacInfo = pacMan.getPackageInfo(pkgName, 0);
                 AppTask appInfo = new AppTask();
-                PackageInfo pacInfo = pacMan.getPackageInfo(rt.topActivity.getPackageName(), 0);
-
-                if(pacInfo.packageName.equals("com.monobogdan.monolaunch") || pacInfo.packageName.equals("com.sprd.simple.launcher"))
-                    continue;
-
-                appInfo.id = rt.id;
-                appInfo.icon = ((BitmapDrawable) pacInfo.applicationInfo.loadIcon(pacMan)).getBitmap();
                 appInfo.name = pacMan.getApplicationLabel(pacInfo.applicationInfo).toString();
-                appInfo.packageName=pacInfo.packageName;
-
+                appInfo.packageName = pkgName;
+                appInfo.icon = ((BitmapDrawable) pacInfo.applicationInfo.loadIcon(pacMan)).getBitmap();
+                appInfo.id = count;
                 tasks.add(appInfo);
-            }
-            catch (PackageManager.NameNotFoundException e)
-            {
-
+                count++;
+            } catch (PackageManager.NameNotFoundException e) {
+                e.printStackTrace();
             }
         }
 
@@ -118,24 +129,24 @@ public class Tasks extends ListView {
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if(keyCode == KeyEvent.KEYCODE_BACK)
-        {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
             launcher.switchToHome();
             return true;
         }
-        if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER)
-        {
-            Intent open = getContext().getPackageManager().getLaunchIntentForPackage(tasks.get(getSelectedItemPosition()).packageName);
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER && !tasks.isEmpty()) {
+            if (getSelectedItemPosition() < 0 || getSelectedItemPosition() >= tasks.size())
+                return super.onKeyUp(keyCode, event);
+
+            Intent open = getContext().getPackageManager().getLaunchIntentForPackage(
+                    tasks.get(getSelectedItemPosition()).packageName
+            );
             if (open != null) {
                 open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getContext().startActivity(open);
             } else {
-                Log.d("TAG","לא נמצא");
-                // האפליקציה לא נמצאה, ניתן לטפל בזה כרצונך
+                Log.d("TAG", "App not found");
             }
         }
-
         return super.onKeyUp(keyCode, event);
     }
 }
-
