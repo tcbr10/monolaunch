@@ -8,8 +8,10 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -128,12 +130,37 @@ public class Tasks extends ListView {
                 AppTask appInfo = new AppTask();
                 appInfo.name = pacMan.getApplicationLabel(pacInfo.applicationInfo).toString();
                 appInfo.packageName = pkgName;
-                appInfo.icon = ((BitmapDrawable) pacInfo.applicationInfo.loadIcon(pacMan)).getBitmap();
+                
+                // FIXED: Safe icon handling for Android 8+ AdaptiveIconDrawable
+                try {
+                    Drawable appIcon = pacInfo.applicationInfo.loadIcon(pacMan);
+                    Bitmap iconBitmap;
+                    
+                    if (appIcon instanceof BitmapDrawable) {
+                        // Already a BitmapDrawable - extract bitmap directly
+                        iconBitmap = ((BitmapDrawable) appIcon).getBitmap();
+                    } else {
+                        // AdaptiveIconDrawable or other drawable type - convert to bitmap
+                        int size = (int) (48 * getResources().getDisplayMetrics().density);
+                        iconBitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+                        Canvas canvas = new Canvas(iconBitmap);
+                        appIcon.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+                        appIcon.draw(canvas);
+                    }
+                    
+                    appInfo.icon = iconBitmap;
+                    
+                } catch (Exception e) {
+                    Log.e("Tasks", "Error loading icon for " + pkgName + ": " + e.getMessage());
+                    // Create a simple placeholder bitmap if icon loading fails
+                    appInfo.icon = Bitmap.createBitmap(48, 48, Bitmap.Config.ARGB_8888);
+                }
+                
                 appInfo.id = count;
                 tasks.add(appInfo);
                 count++;
             } catch (PackageManager.NameNotFoundException e) {
-                e.printStackTrace();
+                Log.e("Tasks", "Package not found: " + pkgName);
             }
         }
 
@@ -164,7 +191,7 @@ public class Tasks extends ListView {
                     open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     getContext().startActivity(open);
                 } else {
-                    Log.d("TAG", "App not found");
+                    Log.d("Tasks", "App not found: " + tasks.get(selectedIndex).packageName);
                 }
                 return true;
 
