@@ -1,6 +1,6 @@
 package com.monobogdan.monolaunch;
 
-
+import android.util.TypedValue;
 import android.Manifest;
 import android.app.Activity;
 import android.app.StatusBarManager;
@@ -49,6 +49,22 @@ public class Launcher extends Activity {
 
         private PlayerWidget playerView;
 
+        private float dpToPx(float dp) {
+            return TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                dp,
+                getResources().getDisplayMetrics()
+            );
+        }
+
+        private float spToPx(float sp) {
+            return TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                sp,
+                getResources().getDisplayMetrics()
+            );
+        }
+
 
         public LauncherView(Context ctx)
         {
@@ -66,7 +82,7 @@ public class Launcher extends Activity {
             fontPaint = new Paint();
             fontPaint.setColor(Color.WHITE);
             fontPaint.setAntiAlias(true);
-            fontPaint.setTextSize(16);
+            fontPaint.setTextSize(spToPx(16));
 
 
             statusWidget = new StatusWidget(this);
@@ -190,18 +206,18 @@ public class Launcher extends Activity {
         private void drawBottomBar(Canvas canvas)
         {
             float metrics = fontPaint.getFontMetrics().bottom;
-            float bottomLine = getHeight() - metrics - 3;
-            float rightLine = getWidth() - fontPaint.measureText((getApplicationContext().getResources().getString(R.string.contacts))) - 5.0f;
+            float bottomLine = getHeight() - metrics - dpToPx(3);
+            float rightLine = getWidth() - fontPaint.measureText((getApplicationContext().getResources().getString(R.string.contacts))) - dpToPx(5);
 
 
-            canvas.drawText(getApplicationContext().getResources().getString(R.string.files), 5.0f, bottomLine, fontPaint);
+            canvas.drawText(getApplicationContext().getResources().getString(R.string.files), dpToPx(5), bottomLine, fontPaint);
             canvas.drawText(getApplicationContext().getResources().getString(R.string.contacts), rightLine, bottomLine, fontPaint);
 
 
             float centerLine = getWidth() / 2 - (iconMenu.getMinimumWidth() / 2);
 
 
-            canvas.drawBitmap(iconMenu.getBitmap(), centerLine, getHeight() - iconMenu.getMinimumHeight() - 3, defaultPaint);
+            canvas.drawBitmap(iconMenu.getBitmap(), centerLine, getHeight() - iconMenu.getMinimumHeight() - dpToPx(3), defaultPaint);
         }
 
 
@@ -210,7 +226,7 @@ public class Launcher extends Activity {
             super.onDraw(canvas);
 
 
-            float baseline = 15.0f;
+            float baseline = dpToPx(15);  
 
 
             baseline += clockWidget.draw(canvas, baseline);
