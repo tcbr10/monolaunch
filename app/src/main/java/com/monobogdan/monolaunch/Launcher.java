@@ -20,6 +20,9 @@ import android.view.KeyEvent;
 import android.view.View;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import android.app.AppOpsManager;
+import android.provider.Settings;
+
 
 import com.monobogdan.monolaunch.widgets.ClockWidget;
 import com.monobogdan.monolaunch.widgets.PlayerWidget;
