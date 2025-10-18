@@ -198,7 +198,23 @@ public class Launcher extends Activity {
                 return true;
             }
 
-
+            // Short press of physical "End Call" key -> lock screen (requires device admin)
+            if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
+                android.app.admin.DevicePolicyManager dpm =
+                        (android.app.admin.DevicePolicyManager) Launcher.this.getSystemService(android.content.Context.DEVICE_POLICY_SERVICE);
+                android.content.ComponentName adminComponent = new android.content.ComponentName(Launcher.this, LockDeviceAdmin.class);
+                if (dpm != null && dpm.isAdminActive(adminComponent)) {
+                    dpm.lockNow(); // immediately lock / turn off screen (if device supports)
+                } else {
+                    // prompt user to activate device admin so lockNow() can be used
+                    Intent intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+                    intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent);
+                    intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            "Enable device admin to allow End-Call to lock the screen from the launcher.");
+                    Launcher.this.startActivity(intent);
+                }
+                return true;
+            }
 
 
             return super.onKeyUp(keyCode, event);
