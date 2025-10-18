@@ -36,6 +36,9 @@ public class Tasks extends ListView {
     private BaseAdapter adapterImpl;
     private ArrayList<AppTask> tasks;
 
+    // Track current DPAD selection
+    private int selectedIndex = 0;
+
     public Tasks(Launcher launcher) {
         super(launcher.getApplicationContext());
         this.launcher = launcher;
@@ -76,15 +79,25 @@ public class Tasks extends ListView {
                 ((ImageView) view.findViewById(R.id.app_icon)).setImageBitmap(task.icon);
                 ((TextView) view.findViewById(R.id.app_name)).setText(task.name);
 
+                // Highlight currently selected DPAD item
+                if (position == selectedIndex) {
+                    view.setBackgroundColor(Color.DKGRAY); // Highlight color
+                } else {
+                    view.setBackgroundColor(Color.TRANSPARENT);
+                }
+
                 return view;
             }
         };
 
         setAdapter(adapterImpl);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
     }
 
     public void updateTaskList() {
         tasks.clear();
+        selectedIndex = 0; // reset selection
         PackageManager pacMan = getContext().getPackageManager();
 
         UsageStatsManager usageStatsManager = (UsageStatsManager) getContext().getSystemService(Context.USAGE_STATS_SERVICE);
@@ -125,28 +138,49 @@ public class Tasks extends ListView {
         }
 
         adapterImpl.notifyDataSetChanged();
+
+        // Auto-select first item for DPAD navigation
+        if (!tasks.isEmpty()) {
+            post(() -> setSelection(selectedIndex));
+        }
     }
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            launcher.switchToHome();
-            return true;
+        if (tasks.isEmpty()) {
+            return super.onKeyUp(keyCode, event);
         }
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER && !tasks.isEmpty()) {
-            if (getSelectedItemPosition() < 0 || getSelectedItemPosition() >= tasks.size())
-                return super.onKeyUp(keyCode, event);
 
-            Intent open = getContext().getPackageManager().getLaunchIntentForPackage(
-                    tasks.get(getSelectedItemPosition()).packageName
-            );
-            if (open != null) {
-                open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                getContext().startActivity(open);
-            } else {
-                Log.d("TAG", "App not found");
-            }
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_BACK:
+                launcher.switchToHome();
+                return true;
+
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+                Intent open = getContext().getPackageManager().getLaunchIntentForPackage(
+                        tasks.get(selectedIndex).packageName
+                );
+                if (open != null) {
+                    open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(open);
+                } else {
+                    Log.d("TAG", "App not found");
+                }
+                return true;
+
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (selectedIndex > 0) selectedIndex--;
+                adapterImpl.notifyDataSetChanged();
+                setSelection(selectedIndex);
+                return true;
+
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (selectedIndex < tasks.size() - 1) selectedIndex++;
+                adapterImpl.notifyDataSetChanged();
+                setSelection(selectedIndex);
+                return true;
         }
+
         return super.onKeyUp(keyCode, event);
     }
 }
