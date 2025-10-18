@@ -6,38 +6,41 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Handler;
+import android.util.TypedValue;  // ADD THIS
 import android.view.View;
 
 import java.text.DateFormat;
 import java.util.Date;
 
-private float dpToPx(float dp) {
-            return TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                dp,
-                getResources().getDisplayMetrics()
-            );
-        }
-
-        private float spToPx(float sp) {
-            return TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_SP,
-                sp,
-                getResources().getDisplayMetrics()
-            );
-        }
-
 public class ClockWidget {
 
     private View parentView;
+    private Context context;  // ADD THIS
     private Paint bgPaint;
     private Paint paint;
     private Paint datePaint;
 
+    // Move helper methods INSIDE the class and use context
+    private float dpToPx(float dp) {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            context.getResources().getDisplayMetrics()  // Use context
+        );
+    }
+
+    private float spToPx(float sp) {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            sp,
+            context.getResources().getDisplayMetrics()  // Use context
+        );
+    }
+
     public ClockWidget(View view)
     {
         parentView = view;
-        Context ctx = view.getContext();
+        context = view.getContext();  // Store context reference
 
         bgPaint = new Paint();
         bgPaint.setColor(Color.argb(99, 128, 128, 128));
@@ -76,8 +79,8 @@ public class ClockWidget {
         canvas.drawText(strDate, parentView.getWidth() / 2 - (datePaint.measureText(strDate) / 2), y+ -datePaint.getFontMetrics().top + -paint.getFontMetrics().top, datePaint);
         yRet += -datePaint.getFontMetrics().top;
 
-        canvas.drawRect(0, y, parentView.getWidth(), yRet + 25, bgPaint);
+        canvas.drawRect(0, y, parentView.getWidth(), yRet + dpToPx(25), bgPaint);  // Convert 25 to dp
 
-        return yRet + 25;
+        return yRet + dpToPx(25);  // Convert 25 to dp
     }
 }
