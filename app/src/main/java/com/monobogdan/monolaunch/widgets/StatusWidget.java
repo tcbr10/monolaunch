@@ -100,31 +100,32 @@ public class StatusWidget extends BroadcastReceiver {
         });
     }
 
-    private void updateSMSState()
-    {
-        String[] proj = new String[]
-                {
-                        Telephony.Sms.ADDRESS,
-                        Telephony.Sms.DATE,
-                        Telephony.Sms.READ
-                };
+    private void updateSMSState() {
+    smsCount = 0;
+    smsSender = "";
 
-        Cursor cursor = context.getContentResolver().query(Uri.parse("content://sms/inbox"), proj,
-                "read = 0",  null, null);
-        smsCount = cursor.getCount();
+    Cursor cursor = null;
+    try {
+        cursor = context.getContentResolver().query(
+                Uri.parse("content://sms/inbox"),
+                new String[]{Telephony.Sms.ADDRESS, Telephony.Sms.DATE, Telephony.Sms.READ},
+                "read = 0", null, null);
 
-        if(smsCount > 0) {
-            cursor.moveToFirst();
-            int addr = cursor.getColumnIndex("address");
-
-            if (addr != -1)
-                smsSender = cursor.getString(addr);
+        if (cursor != null) {
+            smsCount = cursor.getCount();
+            if (smsCount > 0 && cursor.moveToFirst()) {
+                int addr = cursor.getColumnIndex("address");
+                if (addr != -1)
+                    smsSender = cursor.getString(addr);
+            }
         }
-        else
-        {
-            smsSender = "";
-        }
+    } catch (Exception e) {
+        e.printStackTrace(); // Optional: Log safely to file or console
+    } finally {
+        if (cursor != null) cursor.close();
     }
+}
+
 
     private void updateDialState()
     {
