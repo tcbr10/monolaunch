@@ -1,5 +1,6 @@
 package com.monobogdan.monolaunch;
 
+import android.widget.Toast;
 import android.util.TypedValue;
 import android.Manifest;
 import android.app.Activity;
