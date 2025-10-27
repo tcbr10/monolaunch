@@ -23,82 +23,64 @@ import androidx.core.content.ContextCompat;
 import android.app.AppOpsManager;
 import android.provider.Settings;
 
-
 import com.monobogdan.monolaunch.widgets.ClockWidget;
 import com.monobogdan.monolaunch.widgets.PlayerWidget;
 import com.monobogdan.monolaunch.widgets.StatusWidget;
-
 
 public class Launcher extends Activity {
 
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
     private static final String TAG = "Launcher";
 
-    public class LauncherView extends View
-    {
+    public class LauncherView extends View {
         final String TAG = "LauncherView";
-
-
 
         private Paint defaultPaint;
         private Paint fontPaint;
         private BitmapDrawable iconMenu;
 
-
         private ClockWidget clockWidget;
         private StatusWidget statusWidget;
         private long timeSinceStart;
-
 
         private PlayerWidget playerView;
 
         private float dpToPx(float dp) {
             return TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                dp,
-                getResources().getDisplayMetrics()
-            );
+                    TypedValue.COMPLEX_UNIT_DIP,
+                    dp,
+                    getResources().getDisplayMetrics());
         }
 
         private float spToPx(float sp) {
             return TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_SP,
-                sp,
-                getResources().getDisplayMetrics()
-            );
+                    TypedValue.COMPLEX_UNIT_SP,
+                    sp,
+                    getResources().getDisplayMetrics());
         }
 
-
-        public LauncherView(Context ctx)
-        {
+        public LauncherView(Context ctx) {
             super(ctx);
-
 
             clockWidget = new ClockWidget(this);
             playerView = new PlayerWidget(this);
 
-
             defaultPaint = new Paint();
             defaultPaint.setColor(Color.WHITE);
-
 
             fontPaint = new Paint();
             fontPaint.setColor(Color.WHITE);
             fontPaint.setAntiAlias(true);
             fontPaint.setTextSize(spToPx(16));
 
-
             statusWidget = new StatusWidget(this);
-
 
             iconMenu = (BitmapDrawable) ctx.getResources().getDrawable(R.drawable.list);
         }
 
-
         public long getTimeSinceStart() {
             return timeSinceStart;
         }
-
 
         @Override
         public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -106,161 +88,120 @@ public class Launcher extends Activity {
             return super.onKeyDown(keyCode, event);
         }
 
-
         @Override
         public boolean onKeyUp(int keyCode, KeyEvent event) {
 
-
             Log.i(TAG, "onKeyUp: " + keyCode);
-            if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
                 switchToMainMenu();
 
-
                 return true;
             }
 
-
-            if(keyCode == KeyEvent.KEYCODE_CALL)
-            {
+            if (keyCode == KeyEvent.KEYCODE_CALL) {
                 startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.dialer"));
 
-
                 return true;
             }
 
-
-///dial. copied from [https://github.com/Barracuda72/minilaunch](https://github.com/Barracuda72/minilaunch)
-            if(keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9)
-            {
+            /// dial. copied from
+            /// [https://github.com/Barracuda72/minilaunch](https://github.com/Barracuda72/minilaunch)
+            if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
                 Intent intent = new Intent(Intent.ACTION_DIAL);
-                intent.setData(Uri.parse("tel:"+(keyCode-KeyEvent.KEYCODE_0)));
+                intent.setData(Uri.parse("tel:" + (keyCode - KeyEvent.KEYCODE_0)));
                 startActivity(intent);
                 return true;
             }
-            if(keyCode == KeyEvent.KEYCODE_POUND)
-            {
+            if (keyCode == KeyEvent.KEYCODE_POUND) {
                 Intent intent = new Intent(Intent.ACTION_DIAL);
                 intent.setData(Uri.parse("tel:#"));
                 startActivity(intent);
                 return true;
             }
-            if(keyCode == KeyEvent.KEYCODE_STAR)
-            {
+            if (keyCode == KeyEvent.KEYCODE_STAR) {
                 Intent intent = new Intent(Intent.ACTION_DIAL);
                 intent.setData(Uri.parse("tel:*"));
                 startActivity(intent);
                 return true;
             }
-            if(keyCode == KeyEvent.KEYCODE_BACK)
-            {
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
                 startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.contacts"));
                 return true;
             }
 
-
-            if(keyCode == KeyEvent.KEYCODE_MENU)
-            {
+            if (keyCode == KeyEvent.KEYCODE_MENU) {
                 startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.sprd.fileexplorer"));
                 return true;
             }
 
-
-            if(keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
                 startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.mms"));
 
-
-
-            if(keyCode == KeyEvent.KEYCODE_DPAD_DOWN)
-            {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 try {
                     StatusBarManager barMan = (StatusBarManager) getContext().getSystemService("statusbar");
                     barMan.getClass().getMethod("expandNotificationsPanel").invoke(barMan);
-                } catch (Exception e)
-                {
+                } catch (Exception e) {
                     Log.i(TAG, "onKeyUp: Failed to bring status");
                 }
 
-
                 return true;
             }
 
-
-            if(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
                 startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.calendar"));
 
-
-
-            if(keyCode == KeyEvent.KEYCODE_DPAD_UP)
-            {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 switchToTasks();
 
-
                 return true;
             }
 
-            // Short press of physical "End Call" key -> lock screen (requires device admin)
+            // Short press of physical "End Call" key -> send lock screen intent
             if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
-                android.app.admin.DevicePolicyManager dpm =
-                        (android.app.admin.DevicePolicyManager) Launcher.this.getSystemService(android.content.Context.DEVICE_POLICY_SERVICE);
-                android.content.ComponentName adminComponent = new android.content.ComponentName(Launcher.this, LockDeviceAdmin.class);
-                if (dpm != null && dpm.isAdminActive(adminComponent)) {
-                    dpm.lockNow(); // immediately lock / turn off screen (if device supports)
-                } else {
-                    // prompt user to activate device admin so lockNow() can be used
-                    Intent intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
-                    intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent);
-                    intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                            "Enable device admin to allow End-Call to lock the screen from the launcher.");
-                    Launcher.this.startActivity(intent);
-                }
+                Intent intent = new Intent();
+                intent.setAction("com.monobogdan.monolaunch.POWEROFF_SCREEN");
+                sendBroadcast(intent);
                 return true;
             }
-
 
             return super.onKeyUp(keyCode, event);
         }
 
-
-
-        private void drawBottomBar(Canvas canvas)
-        {
+        private void drawBottomBar(Canvas canvas) {
             float metrics = fontPaint.getFontMetrics().bottom;
             float bottomLine = getHeight() - metrics - dpToPx(3);
-            float rightLine = getWidth() - fontPaint.measureText((getApplicationContext().getResources().getString(R.string.contacts))) - dpToPx(5);
+            float rightLine = getWidth()
+                    - fontPaint.measureText((getApplicationContext().getResources().getString(R.string.contacts)))
+                    - dpToPx(5);
 
-
-            canvas.drawText(getApplicationContext().getResources().getString(R.string.files), dpToPx(5), bottomLine, fontPaint);
-            canvas.drawText(getApplicationContext().getResources().getString(R.string.contacts), rightLine, bottomLine, fontPaint);
-
+            canvas.drawText(getApplicationContext().getResources().getString(R.string.files), dpToPx(5), bottomLine,
+                    fontPaint);
+            canvas.drawText(getApplicationContext().getResources().getString(R.string.contacts), rightLine, bottomLine,
+                    fontPaint);
 
             float centerLine = getWidth() / 2 - (iconMenu.getMinimumWidth() / 2);
 
-
-            canvas.drawBitmap(iconMenu.getBitmap(), centerLine, getHeight() - iconMenu.getMinimumHeight() - dpToPx(3), defaultPaint);
+            canvas.drawBitmap(iconMenu.getBitmap(), centerLine, getHeight() - iconMenu.getMinimumHeight() - dpToPx(3),
+                    defaultPaint);
         }
-
 
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
 
-
-            float baseline = dpToPx(15);  
-
+            float baseline = dpToPx(15);
 
             baseline += clockWidget.draw(canvas, baseline);
             baseline += statusWidget.draw(canvas, baseline);
             baseline += playerView.draw(canvas, baseline);
 
-
             clientWidth = getWindow().getDecorView().getWidth();
             clientHeight = getWindow().getDecorView().getHeight(); // HACK!!!
-
 
             drawBottomBar(canvas);
         }
     }
-
 
     private Drawable cachedBackground;
     private LauncherView launcherView;
@@ -268,60 +209,42 @@ public class Launcher extends Activity {
     private DialerView dialerView;
     private Tasks tasks;
 
-
     private int clientHeight;
     private int clientWidth;
-
 
     public Drawable getCachedBackground() {
         return cachedBackground;
     }
 
-
-    public void switchToHome()
-    {
+    public void switchToHome() {
         setContentView(launcherView);
         launcherView.requestFocus();
 
-
         launcherView.setAlpha(0);
-        launcherView.animate().
-                alpha(1.0f).
-                setDuration(350);
+        launcherView.animate().alpha(1.0f).setDuration(350);
     }
 
-
-    private void switchToDialer()
-    {
+    private void switchToDialer() {
         setContentView(dialerView);
         dialerView.requestFocus();
         dialerView.setTranslationY(clientHeight);
-        dialerView.animate().
-                setDuration(250).
-                translationY(0);
+        dialerView.animate().setDuration(250).translationY(0);
     }
 
-
-    private void switchToMainMenu()
-    {
+    private void switchToMainMenu() {
         setContentView(appList);
         appList.requestFocus();
         appList.setTranslationY(clientHeight);
-        appList.animate().
-                setDuration(250).
-                translationY(0);
+        appList.animate().setDuration(250).translationY(0);
     }
 
-
-    private void switchToTasks()
-    {
+    private void switchToTasks() {
         tasks.updateTaskList();
         setContentView(tasks);
         tasks.requestFocus();
         tasks.setTranslationX(clientWidth);
         tasks.animate().setDuration(250).translationX(0);
     }
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -336,7 +259,6 @@ public class Launcher extends Activity {
             Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
             startActivity(intent);
         }
-
 
         // Initialize views
         dialerView = new DialerView(getApplicationContext());
@@ -355,13 +277,12 @@ public class Launcher extends Activity {
 
         // Check and request permission for wallpaper access on Android 6.0+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, 
-                    Manifest.permission.READ_EXTERNAL_STORAGE) 
-                    != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 // Request the permission
                 ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                    REQUEST_EXTERNAL_STORAGE);
+                        new String[] { Manifest.permission.READ_EXTERNAL_STORAGE },
+                        REQUEST_EXTERNAL_STORAGE);
                 // Set default background for now
                 getWindow().setBackgroundDrawableResource(android.R.color.black);
             } else {
@@ -379,7 +300,7 @@ public class Launcher extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        
+
         if (requestCode == REQUEST_EXTERNAL_STORAGE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // Permission granted, load wallpaper
