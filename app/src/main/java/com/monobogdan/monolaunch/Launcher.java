@@ -162,13 +162,15 @@ public class Launcher extends Activity {
             if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
                 if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
                     Log.d(TAG, "ENDCALL detected — about to send broadcast");
-                    Toast.makeText(this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(Launcher.this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
 
                     Intent intent = new Intent("com.monobogdan.monolaunch.POWEROFF_SCREEN");
                     // target MacroDroid explicitly (helps around Android broadcast restrictions)
                     intent.setPackage("com.arlosoft.macrodroid");
                     intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
                     sendBroadcast(intent);
+                    Launcher.this.sendBroadcast(intent);
+
 
                     Log.d(TAG, "Broadcast sent");
                     return true;
