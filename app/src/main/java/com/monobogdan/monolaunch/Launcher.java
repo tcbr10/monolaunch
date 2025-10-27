@@ -160,20 +160,21 @@ public class Launcher extends Activity {
             // Short press of physical "End Call" key -> send lock screen intent
             if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
                 if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
-        Log.d(TAG, "ENDCALL detected — about to send broadcast");
-        Toast.makeText(this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "ENDCALL detected — about to send broadcast");
+                    Toast.makeText(this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
 
-        Intent intent = new Intent("com.monobogdan.monolaunch.POWEROFF_SCREEN");
-        // target MacroDroid explicitly (helps around Android broadcast restrictions)
-        intent.setPackage("com.arlosoft.macrodroid");
-        intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
-        sendBroadcast(intent);
+                    Intent intent = new Intent("com.monobogdan.monolaunch.POWEROFF_SCREEN");
+                    // target MacroDroid explicitly (helps around Android broadcast restrictions)
+                    intent.setPackage("com.arlosoft.macrodroid");
+                    intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
+                    sendBroadcast(intent);
 
-        Log.d(TAG, "Broadcast sent");
-        return true;
+                    Log.d(TAG, "Broadcast sent");
+                    return true;
+                }
+
+                return super.onKeyUp(keyCode, event);
             }
-
-            return super.onKeyUp(keyCode, event);
         }
 
         private void drawBottomBar(Canvas canvas) {
