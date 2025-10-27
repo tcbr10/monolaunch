@@ -159,7 +159,6 @@ public class Launcher extends Activity {
             }
 
             // Short press of physical "End Call" key -> send lock screen intent
-            if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
                 if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
                     Log.d(TAG, "ENDCALL detected — about to send broadcast");
                     Toast.makeText(Launcher.this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
@@ -177,7 +176,7 @@ public class Launcher extends Activity {
                 }
 
                 return super.onKeyUp(keyCode, event);
-            }
+            
         }
 
         private void drawBottomBar(Canvas canvas) {
