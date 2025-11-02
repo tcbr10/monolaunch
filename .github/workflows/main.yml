@@ -27,7 +27,8 @@ jobs:
     # 🔹 Decode the Keystore from GitHub Secrets
     - name: Decode Keystore
       run: |
-        echo "$KEYSTORE_BASE64" | base64 --decode > my-release-key.jks
+        mkdir -p app
+        echo "$KEYSTORE_BASE64" | base64 --decode > app/my-release-key.jks
 
     # 🔹 Build the Signed Release APK
     - name: Build Signed Release APK
