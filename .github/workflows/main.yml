@@ -24,21 +24,27 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 🔹 Decode the Keystore from GitHub Secrets
-    - name: Decode Keystore
+    # 🔹 Decrypt the Keystore from GitHub Secrets
+    - name: Decrypt Keystore
       run: |
         mkdir -p $HOME/keystore
-        echo "$KEYSTORE_BASE64" | tr -d '\r' | base64 --decode > $HOME/keystore/my-release-key.jks
+        # Decode the encrypted file from the secret
+        echo "${{ secrets.KEYSTORE_GPG_ASC }}" > $HOME/keystore/my-release-key.jks.asc
+        # Decrypt it using the passphrase
+        gpg --quiet --batch --yes --decrypt --passphrase "${{ secrets.KEYSTORE_PASSPHRASE }}" \
+        --output $HOME/keystore/my-release-key.jks $HOME/keystore/my-release-key.jks.asc
 
     # 🔹 Build the Signed Release APK
     - name: Build Signed Release APK
       run: |
         ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=$HOME/keystore/my-release-key.jks \
-          -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
-          -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
-          -Pandroid.injected.signing.key.password=$KEY_PASSWORD
-      
+          -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+          -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+          -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+      # Note: KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD are your original 
+      # keystore secrets, NOT the GPG passphrase.
+
     # 🔹 Upload the APK artifact
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
