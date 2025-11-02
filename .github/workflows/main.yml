@@ -27,18 +27,18 @@ jobs:
     # 🔹 Decode the Keystore from GitHub Secrets
     - name: Decode Keystore
       run: |
-        mkdir -p app
-        echo "$KEYSTORE_BASE64" | base64 --decode > app/my-release-key.jks
+        mkdir -p $HOME/keystore
+        echo "$KEYSTORE_BASE64" | tr -d '\r' | base64 --decode > $HOME/keystore/my-release-key.jks
 
     # 🔹 Build the Signed Release APK
     - name: Build Signed Release APK
       run: |
         ./gradlew assembleRelease \
-          -Pandroid.injected.signing.store.file=my-release-key.jks \
+          -Pandroid.injected.signing.store.file=$HOME/keystore/my-release-key.jks \
           -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
           -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
           -Pandroid.injected.signing.key.password=$KEY_PASSWORD
-
+      
     # 🔹 Upload the APK artifact
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
