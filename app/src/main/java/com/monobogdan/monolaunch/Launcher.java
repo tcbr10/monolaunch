@@ -100,7 +100,7 @@ public class Launcher extends Activity {
             }
 
             if (keyCode == KeyEvent.KEYCODE_CALL) {
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.dialer"));
+                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer.ui.PhoneActivity"));
 
                 return true;
             }
@@ -126,17 +126,17 @@ public class Launcher extends Activity {
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_BACK) {
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.contacts"));
+                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer.ui.PeopleActivity"));
                 return true;
             }
 
             if (keyCode == KeyEvent.KEYCODE_MENU) {
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.sprd.fileexplorer"));
+                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.alphainventor.filemanager"));
                 return true;
             }
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.android.mms"));
+                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.p1.chompsms"));
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 try {
