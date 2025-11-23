@@ -100,7 +100,7 @@ public class Launcher extends Activity {
             }
 
             if (keyCode == KeyEvent.KEYCODE_CALL) {
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer.ui.PhoneActivity"));
+                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer"));
 
                 return true;
             }
@@ -136,7 +136,7 @@ public class Launcher extends Activity {
             }
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.p1.chompsms"));
+                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.moez.QKSMS"));
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 try {
