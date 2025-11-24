@@ -5,16 +5,18 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -28,13 +30,13 @@ import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.text.TextUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 
 class AppListView extends GridView {
 
@@ -54,46 +56,74 @@ class AppListView extends GridView {
     }
 
     private Launcher parent;
-    private ArrayList<AppInfo> installedApps;
-    private ArrayList<AppInfo> fullAppList; // Master list for filtering
     
+    // App lists
+    private ArrayList<AppInfo> installedApps; // All apps
+    private ArrayList<AppInfo> filteredApps;  // Search results
+    private List<AppInfo> visibleApps;        // Currently displayed (either installed or filtered)
+
     private List<View> widgetList = new ArrayList<>();
 
-    // T9 Search Variables
-    private StringBuilder t9Query = new StringBuilder();
+    // UI Elements
+    private Drawable focusBackground;
+    private Drawable normalBackground;
     private TextView searchBar;
-    private long lastT9KeyTime = 0;
-    private static final long T9_TIMEOUT = 2000; // Reset search after 2 seconds of inactivity
 
-    // Define the Focus Border Drawable programmatically
-    private GradientDrawable focusBorder;
-    private GradientDrawable transparentBackground;
+    // T9 Search State
+    private boolean isSearching = false;
+    private StringBuilder t9Query = new StringBuilder();
+
+    // T9 Mappings
+    private static final Map<Character, Character> EN_T9 = new HashMap<>();
+    private static final Map<Character, Character> HE_T9 = new HashMap<>();
+
+    static {
+        // English Standard
+        mapT9(EN_T9, "abc", '2');
+        mapT9(EN_T9, "def", '3');
+        mapT9(EN_T9, "ghi", '4');
+        mapT9(EN_T9, "jkl", '5');
+        mapT9(EN_T9, "mno", '6');
+        mapT9(EN_T9, "pqrs", '7');
+        mapT9(EN_T9, "tuv", '8');
+        mapT9(EN_T9, "wxyz", '9');
+
+        // Hebrew Standard (Common Keypad Layout)
+        mapT9(HE_T9, "אבג", '2');
+        mapT9(HE_T9, "דהו", '3');
+        mapT9(HE_T9, "זחט", '4');
+        mapT9(HE_T9, "יכל", '5');
+        mapT9(HE_T9, "מנס", '6');
+        mapT9(HE_T9, "עפצ", '7');
+        mapT9(HE_T9, "קרש", '8');
+        mapT9(HE_T9, "ת", '9');
+    }
+
+    private static void mapT9(Map<Character, Character> map, String letters, char digit) {
+        for (char c : letters.toCharArray()) {
+            map.put(c, digit);
+        }
+    }
 
     public AppListView(Launcher launcher) {
         super(launcher.getApplicationContext());
+
         this.parent = launcher;
-        this.installedApps = new ArrayList<>();
-        this.fullAppList = new ArrayList<>();
+        
+        // Initialize lists
+        installedApps = new ArrayList<>();
+        filteredApps = new ArrayList<>();
+        visibleApps = installedApps; // Default to showing all
 
-        // Initialize Drawables for Focus
-        focusBorder = new GradientDrawable();
-        focusBorder.setShape(GradientDrawable.RECTANGLE);
-        focusBorder.setColor(Color.TRANSPARENT);
-        focusBorder.setStroke(6, 0xFFFFC107); // Yellow border, 6px width
-        focusBorder.setCornerRadius(12f);
+        // Setup UI helpers
+        initFocusBackgrounds();
+        initSearchBar(launcher);
 
-        transparentBackground = new GradientDrawable();
-        transparentBackground.setShape(GradientDrawable.RECTANGLE);
-        transparentBackground.setColor(Color.TRANSPARENT);
-        transparentBackground.setCornerRadius(12f);
-
-        // Create Search Bar Overlay
-        createSearchBar(launcher);
-
+        // Listeners
         setOnItemSelectedListener(new OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                // Handled in OnFocusChangeListener for smoother grid nav
+                Log.i("", "onItemSelected: " + position);
             }
 
             @Override
@@ -103,35 +133,57 @@ class AppListView extends GridView {
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_PACKAGE_ADDED);
+        filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
         launcher.getApplicationContext().registerReceiver(new PackageManagerListener(), filter);
 
+        // Load data
         fetchAppList();
         rebuildUI();
     }
 
-    private void createSearchBar(Activity context) {
-        searchBar = new TextView(context);
-        searchBar.setBackgroundColor(0xEE000000); // Semi-transparent black
-        searchBar.setTextColor(Color.WHITE);
-        searchBar.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        searchBar.setPadding(30, 30, 30, 30);
-        searchBar.setVisibility(View.GONE);
-        searchBar.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        
-        // Add to the parent activity's window on top of everything
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-        );
-        params.gravity = Gravity.TOP;
-        context.addContentView(searchBar, params);
+    private void initFocusBackgrounds() {
+        final float density = getResources().getDisplayMetrics().density;
+
+        // Create a rounded border drawable for focus state
+        GradientDrawable focused = new GradientDrawable();
+        focused.setColor(Color.TRANSPARENT);
+        focused.setCornerRadius(8 * density); // Rounded corners
+        focused.setStroke((int) (3 * density), Color.WHITE); // White thick border
+
+        // Transparent for normal state
+        ColorDrawable normal = new ColorDrawable(Color.TRANSPARENT);
+
+        focusBackground = focused;
+        normalBackground = normal;
+    }
+
+    private void initSearchBar(Context context) {
+        if (context instanceof Activity) {
+            Activity activity = (Activity) context;
+            
+            searchBar = new TextView(context);
+            searchBar.setBackgroundColor(0xEE000000); // Dark semi-transparent background
+            searchBar.setTextColor(Color.WHITE);
+            
+            float density = getResources().getDisplayMetrics().density;
+            int p = (int)(12 * density);
+            searchBar.setPadding(p, p, p, p);
+            searchBar.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+            searchBar.setVisibility(View.GONE); // Hidden by default
+            
+            // Place it at the top of the screen
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+            );
+            lp.gravity = Gravity.TOP;
+            
+            activity.addContentView(searchBar, lp);
+        }
     }
 
     private void fetchAppList() {
         installedApps.clear();
-        
-        if(fullAppList != null) fullAppList.clear();
-        else fullAppList = new ArrayList<>();
 
         Intent filter = new Intent(Intent.ACTION_MAIN);
         filter.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -157,6 +209,7 @@ class AppListView extends GridView {
             installedApps.add(app);
         }
 
+        // Sort alphabetically
         Collections.sort(installedApps, new Comparator<AppInfo>() {
             @Override
             public int compare(AppInfo a1, AppInfo a2) {
@@ -164,15 +217,22 @@ class AppListView extends GridView {
             }
         });
 
-        // Cache full list for T9 filtering
-        fullAppList.addAll(installedApps);
+        // If we were searching, re-apply filter to new list, otherwise show all
+        if (isSearching) {
+            applyT9Filter();
+        } else {
+            visibleApps = installedApps;
+        }
     }
 
     private Bitmap drawableToBitmap(Drawable drawable) {
         if (drawable == null) return null;
+
         if (drawable instanceof BitmapDrawable) {
-            return ((BitmapDrawable) drawable).getBitmap();
+            Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+            if (bitmap != null) return bitmap;
         }
+
         int width = drawable.getIntrinsicWidth();
         int height = drawable.getIntrinsicHeight();
         if (width <= 0) width = 48;
@@ -182,6 +242,7 @@ class AppListView extends GridView {
         Canvas canvas = new Canvas(bitmap);
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);
+
         return bitmap;
     }
 
@@ -190,6 +251,7 @@ class AppListView extends GridView {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int screenH = getResources().getDisplayMetrics().heightPixels;
 
+        // Dynamic sizing
         int iconDp = 64;
         int approxMinSideDp = Math.min(screenW, screenH) / (int) density;
         if (approxMinSideDp <= 240) iconDp = 56;
@@ -202,15 +264,39 @@ class AppListView extends GridView {
         setNumColumns(3);
         setColumnWidth(iconSizePx + itemPadding * 2);
         setClickable(true);
-        setFocusable(true);
-        
-        // Remove default orange selector to use our custom border
-        setSelector(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        setSelector(new ColorDrawable(Color.TRANSPARENT)); // Disable default orange selector
 
         widgetList.clear();
 
-        for (int i = 0; i < installedApps.size(); i++) {
-            final AppInfo app = installedApps.get(i);
+        // Animation listener
+        setOnItemSelectedListener(new OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (view != null) {
+                    // Scale up focused item
+                    view.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100);
+                    view.setBackground(focusBackground); // Apply border
+
+                    // Reset others
+                    for (View v : widgetList) {
+                        if (v != view) {
+                            v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100);
+                            v.setBackground(normalBackground);
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Optional: select last item if nothing selected
+                if (visibleApps.size() > 0) setSelection(visibleApps.size() - 1);
+            }
+        });
+
+        // Build Views from visibleApps
+        for (int i = 0; i < visibleApps.size(); i++) {
+            final AppInfo app = visibleApps.get(i);
 
             LinearLayout container = new LinearLayout(getContext());
             container.setOrientation(LinearLayout.VERTICAL);
@@ -220,15 +306,11 @@ class AppListView extends GridView {
                     iconSizePx + itemPadding * 2,
                     LayoutParams.WRAP_CONTENT
             ));
-            
-            // IMPORTANT for D-pad: Make container focusable
-            container.setFocusable(true);
             container.setClickable(true);
-            // Set default background
-            container.setBackground(transparentBackground);
+            container.setFocusable(true);
+            container.setBackground(normalBackground); // Default no border
 
             ImageView iv = new ImageView(getContext());
-            iv.setBackgroundColor(Color.TRANSPARENT);
             iv.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
             LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(iconSizePx, iconSizePx);
             ivLp.gravity = Gravity.CENTER_HORIZONTAL;
@@ -256,29 +338,28 @@ class AppListView extends GridView {
             container.addView(iv);
             container.addView(label);
 
-            final Intent launchIntent = app.intent;
+            // Click Handler
             container.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     try {
-                        getContext().startActivity(launchIntent);
+                        getContext().startActivity(app.intent);
                     } catch (Exception ex) {
                         Log.e("AppListView", "Failed to launch " + app.name, ex);
                     }
                 }
             });
 
+            // Focus Handler (Important for D-pad)
             container.setOnFocusChangeListener(new OnFocusChangeListener() {
                 @Override
                 public void onFocusChange(View v, boolean hasFocus) {
                     if (hasFocus) {
-                        // Apply Border and Scale Up
-                        v.setBackground(focusBorder);
-                        v.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100);
+                        v.animate().scaleX(1.1f).scaleY(1.1f).setDuration(120);
+                        v.setBackground(focusBackground); // SHOW BORDER
                     } else {
-                        // Remove Border and Scale Down
-                        v.setBackground(transparentBackground);
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100);
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(160);
+                        v.setBackground(normalBackground); // HIDE BORDER
                     }
                 }
             });
@@ -288,9 +369,9 @@ class AppListView extends GridView {
 
         setAdapter(new BaseAdapter() {
             @Override
-            public int getCount() { return installedApps.size(); }
+            public int getCount() { return visibleApps.size(); }
             @Override
-            public Object getItem(int position) { return installedApps.get(position); }
+            public Object getItem(int position) { return visibleApps.get(position); }
             @Override
             public long getItemId(int position) { return position; }
             @Override
@@ -300,124 +381,77 @@ class AppListView extends GridView {
         });
     }
 
-    // ==========================
-    // T9 Search Logic Implementation
-    // ==========================
+    // --- T9 Logic ---
 
-    private char mapCharToT9(char c) {
-        c = Character.toLowerCase(c);
-        // English Mapping
-        if (c >= 'a' && c <= 'c') return '2';
-        if (c >= 'd' && c <= 'f') return '3';
-        if (c >= 'g' && c <= 'i') return '4';
-        if (c >= 'j' && c <= 'l') return '5';
-        if (c >= 'm' && c <= 'o') return '6';
-        if (c >= 'p' && c <= 's') return '7';
-        if (c >= 't' && c <= 'v') return '8';
-        if (c >= 'w' && c <= 'z') return '9';
-
-        // Hebrew Mapping (Standard keypad logic)
-        if (c == 'א' || c == 'ב' || c == 'ג') return '2';
-        if (c == 'ד' || c == 'ה' || c == 'ו') return '3';
-        if (c == 'ז' || c == 'ח' || c == 'ט') return '4';
-        if (c == 'י' || c == 'כ' || c == 'ל' || c == 'ך') return '5';
-        if (c == 'מ' || c == 'נ' || c == 'ס' || c == 'ם' || c == 'ן') return '6';
-        if (c == 'ע' || c == 'פ' || c == 'צ' || c == 'ף' || c == 'ץ' || c == 'ק') return '7';
-        if (c == 'ר' || c == 'ש' || c == 'ת') return '8';
-        
-        return 0;
+    private Character mapCharToT9(char ch) {
+        char c = Character.toLowerCase(ch);
+        if (EN_T9.containsKey(c)) return EN_T9.get(c);
+        if (HE_T9.containsKey(c)) return HE_T9.get(c);
+        return null; // Symbol or number
     }
 
-    private boolean matchesT9(String appName, String t9Digits) {
-        if (t9Digits.isEmpty()) return true;
-        
-        // Extract just the letters from the app name to ignore spaces/symbols in matching
-        StringBuilder cleanName = new StringBuilder();
-        for (char c : appName.toCharArray()) {
-            if (Character.isLetter(c)) cleanName.append(c);
+    private String nameToT9(String name) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : name.toCharArray()) {
+            Character digit = mapCharToT9(c);
+            if (digit != null) sb.append(digit);
+            // You can optionally append the digit itself if it's a number in the name
+            else if (Character.isDigit(c)) sb.append(c);
         }
-        
-        String name = cleanName.toString().toLowerCase(Locale.getDefault());
-        
-        // Check if any substring of the name matches the digit sequence
-        for (int i = 0; i <= name.length() - t9Digits.length(); i++) {
-            boolean match = true;
-            for (int j = 0; j < t9Digits.length(); j++) {
-                if (mapCharToT9(name.charAt(i + j)) != t9Digits.charAt(j)) {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) return true;
-        }
-        return false;
+        return sb.toString();
     }
 
-    private void updateSearch() {
-        long now = System.currentTimeMillis();
-        // Reset if too much time passed
-        if (now - lastT9KeyTime > T9_TIMEOUT && t9Query.length() > 0) {
-            t9Query.setLength(0);
-        }
-        lastT9KeyTime = now;
+    private void applyT9Filter() {
+        filteredApps.clear();
 
-        String digits = t9Query.toString();
-
-        installedApps.clear();
-        if (digits.isEmpty()) {
-            installedApps.addAll(fullAppList);
-            searchBar.setVisibility(View.GONE);
+        if (t9Query.length() == 0) {
+            isSearching = false;
+            visibleApps = installedApps;
+            if (searchBar != null) searchBar.setVisibility(View.GONE);
         } else {
-            searchBar.setVisibility(View.VISIBLE);
-            searchBar.setText("Search: " + digits);
+            isSearching = true;
+            String query = t9Query.toString();
             
-            for (AppInfo app : fullAppList) {
-                if (matchesT9(app.name, digits)) {
-                    installedApps.add(app);
+            for (AppInfo app : installedApps) {
+                String t9Signature = nameToT9(app.name);
+                // Match if T9 signature contains the query sequence
+                if (t9Signature.contains(query)) {
+                    filteredApps.add(app);
                 }
             }
+            visibleApps = filteredApps;
+            
+            if (searchBar != null) {
+                searchBar.setVisibility(View.VISIBLE);
+                searchBar.setText("Search: " + query);
+            }
         }
-        
+
         rebuildUI();
-        
-        // If we have results, focus the first one
-        if (!installedApps.isEmpty()) {
+        // Auto-select first result
+        if (visibleApps.size() > 0) {
             setSelection(0);
-            // Manually trigger focus animation for first item
-             post(new Runnable() {
-                 @Override
-                 public void run() {
-                     if (getChildCount() > 0) {
-                         getChildAt(0).requestFocus();
-                     }
-                 }
-             });
         }
     }
+
+    // --- Key Event Handling ---
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // Check for Number keys (0-9)
+        // Capture number keys for T9
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
             char digit = (char) ('0' + (keyCode - KeyEvent.KEYCODE_0));
-            
-            // If it's a new session (timeout passed), clear previous query
-            if (System.currentTimeMillis() - lastT9KeyTime > T9_TIMEOUT) {
-                t9Query.setLength(0);
-            }
-            
+            // Usually 0 is Space, but for app search we might just ignore or treat as '0'
             t9Query.append(digit);
-            updateSearch();
+            applyT9Filter();
             return true;
         }
-        
-        // Backspace / Delete support
+
+        // Capture Backspace/Del
         if (keyCode == KeyEvent.KEYCODE_DEL) {
             if (t9Query.length() > 0) {
                 t9Query.deleteCharAt(t9Query.length() - 1);
-                // Force timestamp update to keep session alive during deletion
-                lastT9KeyTime = System.currentTimeMillis(); 
-                updateSearch();
+                applyT9Filter();
                 return true;
             }
         }
@@ -427,25 +461,34 @@ class AppListView extends GridView {
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
             int sel = getSelectedItemPosition();
-            if (sel >= 0 && sel < installedApps.size()) {
-                getContext().startActivity(installedApps.get(sel).intent);
+            if (sel >= 0 && sel < visibleApps.size()) {
+                getContext().startActivity(visibleApps.get(sel).intent);
             }
             return true;
         }
 
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            // If search is active, clear it first
-            if (t9Query.length() > 0) {
+            // If searching, back clears search first
+            if (isSearching) {
                 t9Query.setLength(0);
-                updateSearch();
+                applyT9Filter(); // will reset to full list
                 return true;
             }
+            // If not searching, exit to home
             parent.switchToHome();
             return true;
         }
 
         return super.onKeyUp(keyCode, event);
+    }
+
+    @Override
+    protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
+        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
+        // HACK: Maintain focus on list when returning
+        if (visibleApps.size() > 0 && getSelectedItemPosition() == -1)
+            setSelection(0);
     }
 }
