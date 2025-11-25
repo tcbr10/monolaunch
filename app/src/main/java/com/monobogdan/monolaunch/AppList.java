@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -24,6 +25,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.AttributeSet;
+import android.util.Log;
 import android.util.LruCache;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -31,6 +34,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
@@ -52,20 +56,18 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-class AppListView extends GridView {
+public class AppListView extends GridView {
 
-    // --- Data Structures ---
+    // --- Data Classes ---
 
     static class AppInfo {
         String name;
         String packageName;
         Intent intent;
         boolean isPinned;
-        // Icon is now retrieved from cache, not stored here to save memory
     }
 
     static class ViewHolder {
-        LinearLayout container;
         ImageView icon;
         TextView label;
     }
@@ -85,11 +87,11 @@ class AppListView extends GridView {
     private Handler mainHandler;
     private LruCache<String, Bitmap> iconCache;
 
-    // Data
-    private List<AppInfo> installedApps = new ArrayList<>(); // Master list
-    private List<AppInfo> visibleApps = new ArrayList<>();   // Display list
+    // Data (Volatile ensures thread safety for simple swaps)
+    private volatile List<AppInfo> installedApps = new ArrayList<>();
+    private List<AppInfo> visibleApps = new ArrayList<>();
 
-    // Preferences
+    // State
     private SharedPreferences prefs;
     private Set<String> pinnedPackages;
     private Set<String> hiddenPackages;
@@ -97,16 +99,16 @@ class AppListView extends GridView {
     private static final String KEY_PINNED = "pinned_apps";
     private static final String KEY_HIDDEN = "hidden_apps";
 
-    // UI Resources
+    // UI
     private Drawable focusBackground;
-    private Drawable normalBackground;
     private TextView searchBar;
     private boolean isSearchAttached = false;
-    
-    // Search State
+    private View lastSelectedView = null;
+
+    // T9 State
     private StringBuilder t9Query = new StringBuilder();
     private boolean isSearching = false;
-
+    
     // T9 Maps
     private static final Map<Character, Character> T9_MAP = new HashMap<>();
     static {
@@ -119,25 +121,29 @@ class AppListView extends GridView {
         mapT9("יכלך", '5'); mapT9("מנסםן", '6'); mapT9("עפצףץ", '7');
         mapT9("קרש", '8'); mapT9("ת", '9');
     }
-
     private static void mapT9(String letters, char digit) {
         for (char c : letters.toCharArray()) T9_MAP.put(c, digit);
     }
 
-    // --- Constructor & Init ---
+    // --- Constructors ---
+
+    public AppListView(Context context) {
+        super(context);
+        init(context);
+    }
 
     public AppListView(Launcher launcher) {
-        super(launcher.getApplicationContext());
+        super(launcher);
         this.parent = launcher;
+        init(launcher);
+    }
 
-        // Upgrade 2: Background Threading
+    private void init(Context context) {
+        // Threading & Cache
         backgroundExecutor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
-
-        // Upgrade 3: Image Caching (1/8th of memory)
         int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
-        int cacheSize = maxMemory / 8;
-        iconCache = new LruCache<String, Bitmap>(cacheSize) {
+        iconCache = new LruCache<String, Bitmap>(maxMemory / 8) {
             @Override
             protected int sizeOf(String key, Bitmap bitmap) {
                 return bitmap.getByteCount() / 1024;
@@ -145,79 +151,118 @@ class AppListView extends GridView {
         };
 
         // Preferences
-        prefs = launcher.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         pinnedPackages = new HashSet<>(prefs.getStringSet(KEY_PINNED, new HashSet<String>()));
         hiddenPackages = new HashSet<>(prefs.getStringSet(KEY_HIDDEN, new HashSet<String>()));
 
-        initUI();
         initFocusDrawable();
-        initSearchBar(launcher);
+        initSearchBar(context);
 
+        // Grid Settings
+        setNumColumns(3);
+        setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+        setSelector(new ColorDrawable(Color.TRANSPARENT)); // We handle focus manually
+        setFastScrollEnabled(true);
+        
         // Adapter
         adapter = new AppAdapter();
         setAdapter(adapter);
 
-        // Listeners
+        // --- CRITICAL FIX: Selection & Focus ---
+        // Do NOT set focus listeners inside getView. Use this listener on the GridView itself.
+        setOnItemSelectedListener(new OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                // 1. Reset previous view
+                if (lastSelectedView != null && lastSelectedView != view) {
+                    lastSelectedView.setBackground(null);
+                    lastSelectedView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150);
+                }
+                // 2. Highlight new view
+                if (view != null) {
+                    view.setBackground(focusBackground);
+                    view.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100);
+                    lastSelectedView = view;
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                if (lastSelectedView != null) {
+                    lastSelectedView.setBackground(null);
+                    lastSelectedView.animate().scaleX(1.0f).scaleY(1.0f).start();
+                    lastSelectedView = null;
+                }
+            }
+        });
+
+        // Click Listeners
+        setOnItemClickListener((parent1, view, position, id) -> {
+            if (position >= 0 && position < visibleApps.size()) {
+                safeStartActivity(visibleApps.get(position).intent);
+            }
+        });
+
+        setOnItemLongClickListener((parent1, view, position, id) -> {
+            showAppOptions(position);
+            return true; // Consumed
+        });
+
+        // Receivers
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_PACKAGE_ADDED);
         filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
-        launcher.getApplicationContext().registerReceiver(new PackageManagerListener(), filter);
+        context.registerReceiver(new PackageManagerListener(), filter);
 
-        // Context Menu (Long Press)
-        setOnItemLongClickListener((parent1, view, position, id) -> {
-            showAppOptions(position);
-            return true;
-        });
-
-        // Start Loading
         reloadApps();
     }
 
-    private void initUI() {
-        final float density = getResources().getDisplayMetrics().density;
-        
-        // Grid Setup
-        int screenW = getResources().getDisplayMetrics().widthPixels;
-        int minColWidth = (int)(80 * density);
-        int columns = Math.max(3, screenW / minColWidth);
-        setNumColumns(columns);
-        setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
-        setSelector(new ColorDrawable(Color.TRANSPARENT));
-        
-        // Upgrade 8: Visual Scrollbar
-        setFastScrollEnabled(true);
-        setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
-        setVerticalScrollBarEnabled(true);
-    }
-
     private void initFocusDrawable() {
-        final float density = getResources().getDisplayMetrics().density;
+        float density = getResources().getDisplayMetrics().density;
         GradientDrawable gd = new GradientDrawable();
         gd.setColor(Color.TRANSPARENT);
         gd.setCornerRadius(8 * density);
         gd.setStroke((int)(3 * density), Color.WHITE);
         focusBackground = gd;
-        normalBackground = new ColorDrawable(Color.TRANSPARENT);
+    }
+
+    private Activity getActivity() {
+        Context context = getContext();
+        while (context instanceof ContextWrapper) {
+            if (context instanceof Activity) {
+                return (Activity)context;
+            }
+            context = ((ContextWrapper)context).getBaseContext();
+        }
+        return null;
     }
 
     private void initSearchBar(Context context) {
-        if (context instanceof Activity) {
-            searchBar = new TextView(context);
-            searchBar.setBackgroundColor(0xEE222222);
-            searchBar.setTextColor(Color.YELLOW);
-            searchBar.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-            searchBar.setGravity(Gravity.CENTER);
-            int p = (int)(16 * getResources().getDisplayMetrics().density);
-            searchBar.setPadding(p, p, p, p);
-            searchBar.setVisibility(View.GONE);
+        searchBar = new TextView(context);
+        searchBar.setBackgroundColor(0xEE222222);
+        searchBar.setTextColor(Color.YELLOW);
+        searchBar.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        searchBar.setGravity(Gravity.CENTER);
+        int p = (int)(12 * getResources().getDisplayMetrics().density);
+        searchBar.setPadding(p, p, p, p);
+        searchBar.setVisibility(View.GONE);
+    }
+
+    private void safeStartActivity(Intent intent) {
+        try {
+            if (intent != null) getContext().startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "Cannot start app", Toast.LENGTH_SHORT).show();
         }
     }
 
-    // --- Data Loading (Background) ---
+    // --- Data Loading (Thread Safe) ---
 
     private void reloadApps() {
         backgroundExecutor.execute(() -> {
-            installedApps.clear();
+            // 1. Build NEW list (don't modify existing one to avoid concurrent exception)
+            List<AppInfo> newList = new ArrayList<>();
+            
             Intent filter = new Intent(Intent.ACTION_MAIN);
             filter.addCategory(Intent.CATEGORY_LAUNCHER);
             PackageManager pm = getContext().getPackageManager();
@@ -239,26 +284,31 @@ class AppListView extends GridView {
                 app.intent = pm.getLaunchIntentForPackage(pkg);
                 app.isPinned = pinnedPackages.contains(pkg);
 
-                // Pre-cache icon in background
+                // Cache icon
                 if (iconCache.get(pkg) == null) {
-                    Drawable d = info.loadIcon(pm);
-                    Bitmap b = drawableToBitmap(d);
-                    if (b != null) iconCache.put(pkg, b);
+                    try {
+                        Drawable d = info.loadIcon(pm);
+                        Bitmap b = drawableToBitmap(d);
+                        if (b != null) iconCache.put(pkg, b);
+                    } catch (OutOfMemoryError e) {
+                        iconCache.evictAll(); // Clear cache and try again next time
+                    }
                 }
-
-                if (app.intent != null) installedApps.add(app);
+                
+                if (app.intent != null) newList.add(app);
             }
 
-            // Sort
-            Collections.sort(installedApps, (a, b) -> {
+            Collections.sort(newList, (a, b) -> {
                 if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
                 return a.name.compareToIgnoreCase(b.name);
             });
 
-            // Update UI
+            // 2. Swap on Main Thread
             mainHandler.post(() -> {
-                if (isSearching) applyT9Filter(); 
-                else {
+                installedApps = newList; // Atomic swap
+                if (isSearching) {
+                    applyT9Filter(); // Re-filter with new data
+                } else {
                     visibleApps = new ArrayList<>(installedApps);
                     adapter.notifyDataSetChanged();
                 }
@@ -278,7 +328,7 @@ class AppListView extends GridView {
         return b;
     }
 
-    // --- Adapter (Upgrade 1 & 9: ViewHolder + SectionIndexer) ---
+    // --- Adapter ---
 
     private class AppAdapter extends BaseAdapter implements SectionIndexer {
         
@@ -287,7 +337,6 @@ class AppListView extends GridView {
 
         @Override
         public void notifyDataSetChanged() {
-            // Upgrade 9: Alphabet Headers Logic
             alphaIndexer = new HashMap<>();
             for (int i = 0; i < visibleApps.size(); i++) {
                 String s = visibleApps.get(i).name.substring(0, 1).toUpperCase();
@@ -297,7 +346,6 @@ class AppListView extends GridView {
             Collections.sort(sectionList);
             sections = new String[sectionList.size()];
             sectionList.toArray(sections);
-            
             super.notifyDataSetChanged();
         }
 
@@ -312,7 +360,6 @@ class AppListView extends GridView {
         public View getView(int position, View convertView, ViewGroup parent) {
             ViewHolder holder;
             if (convertView == null) {
-                // Inflate View
                 float density = getResources().getDisplayMetrics().density;
                 int iconSize = (int)(56 * density);
                 
@@ -321,10 +368,13 @@ class AppListView extends GridView {
                 container.setGravity(Gravity.CENTER);
                 int pad = (int)(8 * density);
                 container.setPadding(pad, pad, pad, pad);
-                container.setFocusable(true);
-                container.setClickable(true);
-                // Upgrade 7: RTL Support
-                container.setLayoutDirection(View.LAYOUT_DIRECTION_LOCALE); 
+                
+                // CRITICAL: These must be FALSE so GridView handles the events
+                container.setFocusable(false);
+                container.setClickable(false); 
+                
+                // RTL Support
+                container.setLayoutDirection(View.LAYOUT_DIRECTION_LOCALE);
 
                 ImageView iv = new ImageView(getContext());
                 iv.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
@@ -340,7 +390,6 @@ class AppListView extends GridView {
                 container.addView(tv);
 
                 holder = new ViewHolder();
-                holder.container = container;
                 holder.icon = iv;
                 holder.label = tv;
                 container.setTag(holder);
@@ -353,29 +402,13 @@ class AppListView extends GridView {
             holder.label.setText(app.name);
             holder.label.setTextColor(app.isPinned ? Color.YELLOW : Color.WHITE);
 
-            // Get from Cache
             Bitmap b = iconCache.get(app.packageName);
             if (b != null) holder.icon.setImageBitmap(b);
-            else holder.icon.setImageResource(android.R.drawable.sym_def_app_icon); // Fallback
-
-            // Click & Focus Logic
-            holder.container.setOnClickListener(v -> getContext().startActivity(app.intent));
-            
-            // D-Pad Focus Animation
-            holder.container.setOnFocusChangeListener((v, hasFocus) -> {
-                if (hasFocus) {
-                    v.setBackground(focusBackground);
-                    v.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100);
-                } else {
-                    v.setBackground(normalBackground);
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100);
-                }
-            });
+            else holder.icon.setImageResource(android.R.drawable.sym_def_app_icon);
 
             return convertView;
         }
 
-        // SectionIndexer Implementation
         @Override
         public Object[] getSections() { return sections; }
         @Override
@@ -387,10 +420,11 @@ class AppListView extends GridView {
         public int getSectionForPosition(int position) { return 0; }
     }
 
-    // --- Menu Logic (Upgrade 4, 5, 6, 10) ---
+    // --- Menu & T9 Logic ---
 
     private void showAppOptions(int position) {
         if (position < 0 || position >= visibleApps.size()) return;
+        
         final AppInfo app = visibleApps.get(position);
         
         List<String> ops = new ArrayList<>();
@@ -405,11 +439,23 @@ class AppListView extends GridView {
             .setItems(ops.toArray(new String[0]), (d, w) -> {
                 String sel = ops.get(w);
                 if (sel.contains("Pin")) togglePin(app);
-                else if (sel.equals("Uninstall")) uninstallApp(app);
-                else if (sel.equals("Hide App")) toggleHide(app);
+                else if (sel.equals("Uninstall")) {
+                    Intent i = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(i);
+                }
+                else if (sel.equals("Hide App")) {
+                    hiddenPackages.add(app.packageName);
+                    prefs.edit().putStringSet(KEY_HIDDEN, hiddenPackages).apply();
+                    reloadApps();
+                }
                 else if (sel.equals("System Settings")) 
-                    getContext().startActivity(new Intent(Settings.ACTION_SETTINGS));
-                else if (sel.equals("Reset Hidden Apps")) resetHiddenApps();
+                    safeStartActivity(new Intent(Settings.ACTION_SETTINGS));
+                else if (sel.equals("Reset Hidden Apps")) {
+                    hiddenPackages.clear();
+                    prefs.edit().remove(KEY_HIDDEN).apply();
+                    reloadApps();
+                }
             })
             .show();
     }
@@ -420,27 +466,6 @@ class AppListView extends GridView {
         prefs.edit().putStringSet(KEY_PINNED, pinnedPackages).apply();
         reloadApps();
     }
-
-    private void toggleHide(AppInfo app) {
-        hiddenPackages.add(app.packageName);
-        prefs.edit().putStringSet(KEY_HIDDEN, hiddenPackages).apply();
-        Toast.makeText(getContext(), "App Hidden", Toast.LENGTH_SHORT).show();
-        reloadApps();
-    }
-
-    private void resetHiddenApps() {
-        hiddenPackages.clear();
-        prefs.edit().remove(KEY_HIDDEN).apply();
-        reloadApps();
-    }
-
-    private void uninstallApp(AppInfo app) {
-        Intent i = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName));
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        getContext().startActivity(i);
-    }
-
-    // --- T9 Search Logic ---
 
     private String getT9Signature(String name) {
         StringBuilder sb = new StringBuilder();
@@ -453,16 +478,21 @@ class AppListView extends GridView {
 
     private void applyT9Filter() {
         String query = t9Query.toString();
+        List<AppInfo> tempResult = new ArrayList<>();
+        
+        // Iterate over local 'installedApps' to avoid CME
+        List<AppInfo> source = installedApps; 
+        
         if (query.isEmpty()) {
             isSearching = false;
-            visibleApps = new ArrayList<>(installedApps);
+            visibleApps = new ArrayList<>(source);
             toggleSearchBar(false);
         } else {
             isSearching = true;
-            visibleApps.clear();
-            for (AppInfo app : installedApps) {
-                if (getT9Signature(app.name).contains(query)) visibleApps.add(app);
+            for (AppInfo app : source) {
+                if (getT9Signature(app.name).contains(query)) tempResult.add(app);
             }
+            visibleApps = tempResult;
             toggleSearchBar(true);
         }
         adapter.notifyDataSetChanged();
@@ -470,8 +500,9 @@ class AppListView extends GridView {
     }
 
     private void toggleSearchBar(boolean show) {
-        if (searchBar == null) return;
-        Activity activity = (Activity) getContext();
+        Activity activity = getActivity();
+        if (activity == null || searchBar == null) return;
+
         if (show) {
             if (!isSearchAttached) {
                 FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
@@ -488,8 +519,6 @@ class AppListView extends GridView {
         }
     }
 
-    // --- Keys & Cleanup ---
-
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         // T9
@@ -502,12 +531,19 @@ class AppListView extends GridView {
             if (t9Query.length() > 0) {
                 t9Query.deleteCharAt(t9Query.length() - 1);
                 applyT9Filter();
+            } else if (isSearching) {
+                // If empty but still in search mode, cancel it
+                t9Query.setLength(0);
+                applyT9Filter();
             }
             return true;
         }
-        // Menu
+        // Left Menu Button Check
         if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SOFT_LEFT) {
-            showAppOptions(getSelectedItemPosition());
+            int pos = getSelectedItemPosition();
+            if (pos != AdapterView.INVALID_POSITION) {
+                showAppOptions(pos);
+            }
             return true;
         }
         return super.onKeyDown(keyCode, event);
@@ -516,8 +552,9 @@ class AppListView extends GridView {
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-            if (getSelectedItemPosition() >= 0 && getSelectedItemPosition() < visibleApps.size()) {
-                getContext().startActivity(visibleApps.get(getSelectedItemPosition()).intent);
+            int pos = getSelectedItemPosition();
+            if (pos != AdapterView.INVALID_POSITION && pos < visibleApps.size()) {
+                safeStartActivity(visibleApps.get(pos).intent);
             }
             return true;
         }
@@ -527,7 +564,7 @@ class AppListView extends GridView {
                 applyT9Filter();
                 return true;
             }
-            parent.switchToHome();
+            if (parent != null) parent.switchToHome();
             return true;
         }
         return super.onKeyUp(keyCode, event);
@@ -539,14 +576,6 @@ class AppListView extends GridView {
         if (isSearchAttached && searchBar != null && searchBar.getParent() != null) {
             ((ViewGroup) searchBar.getParent()).removeView(searchBar);
         }
-        backgroundExecutor.shutdown();
-    }
-    
-    @Override
-    protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
-        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
-        if (gainFocus && adapter.getCount() > 0 && getSelectedItemPosition() == -1) {
-            setSelection(0);
-        }
+        if (backgroundExecutor != null) backgroundExecutor.shutdown();
     }
 }
