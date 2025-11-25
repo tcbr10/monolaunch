@@ -14,7 +14,6 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -25,7 +24,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.TextUtils;
-import android.util.AttributeSet;
 import android.util.Log;
 import android.util.LruCache;
 import android.util.TypedValue;
@@ -33,8 +31,6 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
-import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
@@ -56,7 +52,9 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class AppList extends GridView {
+// NOTE: The 'public' keyword is removed so this class can live in 'AppList.java'
+// while still being named 'AppListView' to satisfy Launcher.java.
+class AppListView extends GridView {
 
     // --- Data Classes ---
 
@@ -127,12 +125,12 @@ public class AppList extends GridView {
 
     // --- Constructors ---
 
-    public AppList(Context context) {
+    public AppListView(Context context) {
         super(context);
         init(context);
     }
 
-    public AppList(Launcher launcher) {
+    public AppListView(Launcher launcher) {
         super(launcher);
         this.parent = launcher;
         init(launcher);
