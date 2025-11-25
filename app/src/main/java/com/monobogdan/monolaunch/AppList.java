@@ -56,7 +56,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class AppListView extends GridView {
+public class AppList extends GridView {
 
     // --- Data Classes ---
 
@@ -127,12 +127,12 @@ public class AppListView extends GridView {
 
     // --- Constructors ---
 
-    public AppListView(Context context) {
+    public AppList(Context context) {
         super(context);
         init(context);
     }
 
-    public AppListView(Launcher launcher) {
+    public AppList(Launcher launcher) {
         super(launcher);
         this.parent = launcher;
         init(launcher);
@@ -168,8 +168,7 @@ public class AppListView extends GridView {
         adapter = new AppAdapter();
         setAdapter(adapter);
 
-        // --- CRITICAL FIX: Selection & Focus ---
-        // Do NOT set focus listeners inside getView. Use this listener on the GridView itself.
+        // --- Selection & Focus ---
         setOnItemSelectedListener(new OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -197,15 +196,21 @@ public class AppListView extends GridView {
         });
 
         // Click Listeners
-        setOnItemClickListener((parent1, view, position, id) -> {
-            if (position >= 0 && position < visibleApps.size()) {
-                safeStartActivity(visibleApps.get(position).intent);
+        setOnItemClickListener(new OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                if (position >= 0 && position < visibleApps.size()) {
+                    safeStartActivity(visibleApps.get(position).intent);
+                }
             }
         });
 
-        setOnItemLongClickListener((parent1, view, position, id) -> {
-            showAppOptions(position);
-            return true; // Consumed
+        setOnItemLongClickListener(new OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+                showAppOptions(position);
+                return true; // Consumed
+            }
         });
 
         // Receivers
@@ -259,60 +264,69 @@ public class AppListView extends GridView {
     // --- Data Loading (Thread Safe) ---
 
     private void reloadApps() {
-        backgroundExecutor.execute(() -> {
-            // 1. Build NEW list (don't modify existing one to avoid concurrent exception)
-            List<AppInfo> newList = new ArrayList<>();
-            
-            Intent filter = new Intent(Intent.ACTION_MAIN);
-            filter.addCategory(Intent.CATEGORY_LAUNCHER);
-            PackageManager pm = getContext().getPackageManager();
-
-            List<ResolveInfo> rawApps;
-            if (Build.VERSION.SDK_INT >= 33) {
-                rawApps = pm.queryIntentActivities(filter, PackageManager.ResolveInfoFlags.of(0));
-            } else {
-                rawApps = pm.queryIntentActivities(filter, 0);
-            }
-
-            for (ResolveInfo info : rawApps) {
-                String pkg = info.activityInfo.packageName;
-                if (hiddenPackages.contains(pkg)) continue;
-
-                AppInfo app = new AppInfo();
-                app.name = info.loadLabel(pm).toString();
-                app.packageName = pkg;
-                app.intent = pm.getLaunchIntentForPackage(pkg);
-                app.isPinned = pinnedPackages.contains(pkg);
-
-                // Cache icon
-                if (iconCache.get(pkg) == null) {
-                    try {
-                        Drawable d = info.loadIcon(pm);
-                        Bitmap b = drawableToBitmap(d);
-                        if (b != null) iconCache.put(pkg, b);
-                    } catch (OutOfMemoryError e) {
-                        iconCache.evictAll(); // Clear cache and try again next time
-                    }
-                }
+        backgroundExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                // 1. Build NEW list (don't modify existing one to avoid concurrent exception)
+                List<AppInfo> newList = new ArrayList<>();
                 
-                if (app.intent != null) newList.add(app);
-            }
+                Intent filter = new Intent(Intent.ACTION_MAIN);
+                filter.addCategory(Intent.CATEGORY_LAUNCHER);
+                PackageManager pm = getContext().getPackageManager();
 
-            Collections.sort(newList, (a, b) -> {
-                if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-                return a.name.compareToIgnoreCase(b.name);
-            });
-
-            // 2. Swap on Main Thread
-            mainHandler.post(() -> {
-                installedApps = newList; // Atomic swap
-                if (isSearching) {
-                    applyT9Filter(); // Re-filter with new data
+                List<ResolveInfo> rawApps;
+                if (Build.VERSION.SDK_INT >= 33) {
+                    rawApps = pm.queryIntentActivities(filter, PackageManager.ResolveInfoFlags.of(0));
                 } else {
-                    visibleApps = new ArrayList<>(installedApps);
-                    adapter.notifyDataSetChanged();
+                    rawApps = pm.queryIntentActivities(filter, 0);
                 }
-            });
+
+                for (ResolveInfo info : rawApps) {
+                    String pkg = info.activityInfo.packageName;
+                    if (hiddenPackages.contains(pkg)) continue;
+
+                    AppInfo app = new AppInfo();
+                    app.name = info.loadLabel(pm).toString();
+                    app.packageName = pkg;
+                    app.intent = pm.getLaunchIntentForPackage(pkg);
+                    app.isPinned = pinnedPackages.contains(pkg);
+
+                    // Cache icon
+                    if (iconCache.get(pkg) == null) {
+                        try {
+                            Drawable d = info.loadIcon(pm);
+                            Bitmap b = drawableToBitmap(d);
+                            if (b != null) iconCache.put(pkg, b);
+                        } catch (OutOfMemoryError e) {
+                            iconCache.evictAll(); 
+                        }
+                    }
+                    
+                    if (app.intent != null) newList.add(app);
+                }
+
+                Collections.sort(newList, new Comparator<AppInfo>() {
+                    @Override
+                    public int compare(AppInfo a, AppInfo b) {
+                        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+                        return a.name.compareToIgnoreCase(b.name);
+                    }
+                });
+
+                // 2. Swap on Main Thread
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        installedApps = newList; // Atomic swap
+                        if (isSearching) {
+                            applyT9Filter(); // Re-filter with new data
+                        } else {
+                            visibleApps = new ArrayList<>(installedApps);
+                            adapter.notifyDataSetChanged();
+                        }
+                    }
+                });
+            }
         });
     }
 
@@ -339,8 +353,10 @@ public class AppListView extends GridView {
         public void notifyDataSetChanged() {
             alphaIndexer = new HashMap<>();
             for (int i = 0; i < visibleApps.size(); i++) {
-                String s = visibleApps.get(i).name.substring(0, 1).toUpperCase();
-                if (!alphaIndexer.containsKey(s)) alphaIndexer.put(s, i);
+                if (visibleApps.get(i).name.length() > 0) {
+                    String s = visibleApps.get(i).name.substring(0, 1).toUpperCase();
+                    if (!alphaIndexer.containsKey(s)) alphaIndexer.put(s, i);
+                }
             }
             ArrayList<String> sectionList = new ArrayList<>(alphaIndexer.keySet());
             Collections.sort(sectionList);
@@ -373,8 +389,9 @@ public class AppListView extends GridView {
                 container.setFocusable(false);
                 container.setClickable(false); 
                 
-                // RTL Support
-                container.setLayoutDirection(View.LAYOUT_DIRECTION_LOCALE);
+                if (Build.VERSION.SDK_INT >= 17) {
+                    container.setLayoutDirection(View.LAYOUT_DIRECTION_LOCALE);
+                }
 
                 ImageView iv = new ImageView(getContext());
                 iv.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
@@ -396,6 +413,9 @@ public class AppListView extends GridView {
                 convertView = container;
             } else {
                 holder = (ViewHolder) convertView.getTag();
+                convertView.setBackground(null); // Reset recycled view state
+                convertView.setScaleX(1.0f);
+                convertView.setScaleY(1.0f);
             }
 
             AppInfo app = getItem(position);
@@ -434,27 +454,32 @@ public class AppListView extends GridView {
         ops.add("System Settings");
         if (!hiddenPackages.isEmpty()) ops.add("Reset Hidden Apps");
 
+        final String[] options = ops.toArray(new String[0]);
+
         new AlertDialog.Builder(getContext())
             .setTitle(app.name)
-            .setItems(ops.toArray(new String[0]), (d, w) -> {
-                String sel = ops.get(w);
-                if (sel.contains("Pin")) togglePin(app);
-                else if (sel.equals("Uninstall")) {
-                    Intent i = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName));
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    getContext().startActivity(i);
-                }
-                else if (sel.equals("Hide App")) {
-                    hiddenPackages.add(app.packageName);
-                    prefs.edit().putStringSet(KEY_HIDDEN, hiddenPackages).apply();
-                    reloadApps();
-                }
-                else if (sel.equals("System Settings")) 
-                    safeStartActivity(new Intent(Settings.ACTION_SETTINGS));
-                else if (sel.equals("Reset Hidden Apps")) {
-                    hiddenPackages.clear();
-                    prefs.edit().remove(KEY_HIDDEN).apply();
-                    reloadApps();
+            .setItems(options, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    String sel = options[which];
+                    if (sel.contains("Pin")) togglePin(app);
+                    else if (sel.equals("Uninstall")) {
+                        Intent i = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getContext().startActivity(i);
+                    }
+                    else if (sel.equals("Hide App")) {
+                        hiddenPackages.add(app.packageName);
+                        prefs.edit().putStringSet(KEY_HIDDEN, hiddenPackages).apply();
+                        reloadApps();
+                    }
+                    else if (sel.equals("System Settings")) 
+                        safeStartActivity(new Intent(Settings.ACTION_SETTINGS));
+                    else if (sel.equals("Reset Hidden Apps")) {
+                        hiddenPackages.clear();
+                        prefs.edit().remove(KEY_HIDDEN).apply();
+                        reloadApps();
+                    }
                 }
             })
             .show();
@@ -532,7 +557,6 @@ public class AppListView extends GridView {
                 t9Query.deleteCharAt(t9Query.length() - 1);
                 applyT9Filter();
             } else if (isSearching) {
-                // If empty but still in search mode, cancel it
                 t9Query.setLength(0);
                 applyT9Filter();
             }
