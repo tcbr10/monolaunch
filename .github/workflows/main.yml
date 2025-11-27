@@ -51,3 +51,10 @@ jobs:
       with:
         name: app-release
         path: app/build/outputs/apk/release/app-release.apk
+
+    # 🔹 Deploy using WebDAV
+    - name: Upload to WebDAV
+      run: |
+        curl -T app/build/outputs/apk/release/app-release.apk \
+             -u "${{ secrets.WEB_USER }}:${{ secrets.WEB_PASS }}" \
+             "${{ secrets.WEB_URL }}"
