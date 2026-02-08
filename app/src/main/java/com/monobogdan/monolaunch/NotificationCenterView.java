@@ -225,30 +225,6 @@ private float drawActions(Canvas canvas, NotificationItem item, float yPos) {
 }
 
 
-    private float drawActions(Canvas canvas, NotificationItem item, float yPos) {
-        String actionHeader = isRTL ? "פעולות זמינות:" : "Available actions:";
-        canvas.drawText(actionHeader, dpToPx(10), yPos, textPaint);
-        yPos += dpToPx(20);
-
-        for (int i = 0; i < item.actions.size(); i++) {
-            NotificationItem.NotificationAction action = item.actions.get(i);
-            
-            if (i == selectedActionIndex) {
-                canvas.drawRect(dpToPx(5), yPos - dpToPx(15), getWidth() - dpToPx(5), yPos + dpToPx(5), selectedPaint);
-            }
-
-            String actionText = "[" + (i + 1) + "] " + action.title;
-            canvas.drawText(actionText, dpToPx(15), yPos, textPaint);
-            yPos += dpToPx(22);
-        }
-
-        String backHint = isRTL ? "[*] חזור" : "[*] Back";
-        canvas.drawText(backHint, dpToPx(15), yPos, timePaint);
-        yPos += dpToPx(18);
-
-        return yPos;
-    }
-
     private String formatTime(long timestamp) {
         long now = System.currentTimeMillis();
         long diff = now - timestamp;
