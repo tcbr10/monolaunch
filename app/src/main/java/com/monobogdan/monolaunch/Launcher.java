@@ -99,11 +99,23 @@ public class Launcher extends Activity {
                 return true;
             }
 
-            if (keyCode == KeyEvent.KEYCODE_CALL) {
-                startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer"));
+            // if (keyCode == KeyEvent.KEYCODE_CALL) {
+            //     startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer"));
 
-                return true;
-            }
+            //     return true;
+            // }
+
+            if (keyCode == KeyEvent.KEYCODE_CALL) {
+    try {
+        Intent dialIntent = new Intent(Intent.ACTION_DIAL);
+        startActivity(dialIntent);
+    } catch (Exception e) {
+        Log.e(TAG, "Failed to launch dialer: " + e.getMessage());
+        Toast.makeText(getContext(), "Dialer not available", Toast.LENGTH_SHORT).show();
+    }
+    return true;
+}
+
 
             /// dial. copied from
             /// [https://github.com/Barracuda72/minilaunch](https://github.com/Barracuda72/minilaunch)
