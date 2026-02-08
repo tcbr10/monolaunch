@@ -16,13 +16,13 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.app.AppOpsManager;
-import android.provider.Settings;
 
 import com.monobogdan.monolaunch.widgets.ClockWidget;
 import com.monobogdan.monolaunch.widgets.PlayerWidget;
@@ -32,6 +32,23 @@ public class Launcher extends Activity {
 
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
     private static final String TAG = "Launcher";
+
+    // New fields for notification and command center
+    private NotificationCenterView notificationCenter;
+    private CommandCenterView commandCenter;
+    private DialerView dialerView;
+    private Tasks tasks;
+
+    private Drawable cachedBackground;
+    private LauncherView launcherView;
+    private AppListView appList;
+
+    private int clientHeight;
+    private int clientWidth;
+
+    public Drawable getCachedBackground() {
+        return cachedBackground;
+    }
 
     public class LauncherView extends View {
         final String TAG = "LauncherView";
@@ -95,30 +112,22 @@ public class Launcher extends Activity {
             Log.i(TAG, "onKeyUp: " + keyCode);
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
                 switchToMainMenu();
-
                 return true;
             }
 
-            // if (keyCode == KeyEvent.KEYCODE_CALL) {
-            //     startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer"));
-
-            //     return true;
-            // }
-
             if (keyCode == KeyEvent.KEYCODE_CALL) {
-    try {
-        Intent dialIntent = new Intent(Intent.ACTION_DIAL);
-        startActivity(dialIntent);
-    } catch (Exception e) {
-        Log.e(TAG, "Failed to launch dialer: " + e.getMessage());
-        Toast.makeText(getContext(), "Dialer not available", Toast.LENGTH_SHORT).show();
-    }
-    return true;
-}
+                Intent dialIntent = getContext().getPackageManager().getLaunchIntentForPackage("com.hb.dialer.free");
+                if (dialIntent != null) {
+                    startActivity(dialIntent);
+                } else {
+                    // Fallback
+                    Intent fallbackIntent = new Intent(Intent.ACTION_DIAL);
+                    startActivity(fallbackIntent);
+                }
+                return true;
+            }
 
-
-            /// dial. copied from
-            /// [https://github.com/Barracuda72/minilaunch](https://github.com/Barracuda72/minilaunch)
+            /// dial. copied from https://github.com/Barracuda72/minilaunch
             if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
                 Intent intent = new Intent(Intent.ACTION_DIAL);
                 intent.setData(Uri.parse("tel:" + (keyCode - KeyEvent.KEYCODE_0)));
@@ -151,13 +160,8 @@ public class Launcher extends Activity {
                 startActivity(getContext().getPackageManager().getLaunchIntentForPackage("com.moez.QKSMS"));
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                try {
-                    StatusBarManager barMan = (StatusBarManager) getContext().getSystemService("statusbar");
-                    barMan.getClass().getMethod("expandNotificationsPanel").invoke(barMan);
-                } catch (Exception e) {
-                    Log.i(TAG, "onKeyUp: Failed to bring status");
-                }
-
+                // Open custom notification center instead of system drawer
+                switchToNotificationCenter();
                 return true;
             }
 
@@ -166,29 +170,41 @@ public class Launcher extends Activity {
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 switchToTasks();
-
                 return true;
             }
 
             // Short press of physical "End Call" key -> send lock screen intent
-                if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
-                    Log.d(TAG, "ENDCALL detected — about to send broadcast");
-                    Toast.makeText(Launcher.this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
+            if (keyCode == KeyEvent.KEYCODE_ENDCALL) {
+                Log.d(TAG, "ENDCALL detected — about to send broadcast");
+                Toast.makeText(Launcher.this, "ENDCALL detected", Toast.LENGTH_SHORT).show();
 
-                    Intent intent = new Intent("com.monobogdan.monolaunch.POWEROFF_SCREEN");
-                    // target MacroDroid explicitly (helps around Android broadcast restrictions)
-                    intent.setPackage("com.arlosoft.macrodroid");
-                    intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
-                    sendBroadcast(intent);
-                    Launcher.this.sendBroadcast(intent);
+                Intent intent = new Intent("com.monobogdan.monolaunch.POWEROFF_SCREEN");
+                // target MacroDroid explicitly (helps around Android broadcast restrictions)
+                intent.setPackage("com.arlosoft.macrodroid");
+                intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
+                sendBroadcast(intent);
+                Launcher.this.sendBroadcast(intent);
 
+                Log.d(TAG, "Broadcast sent");
+                return true;
+            }
 
-                    Log.d(TAG, "Broadcast sent");
-                    return true;
-                }
+            return super.onKeyUp(keyCode, event);
+        }
 
-                return super.onKeyUp(keyCode, event);
-            
+        private void switchToNotificationCenter() {
+            Launcher launcher = (Launcher) getContext();
+            launcher.switchToNotificationCenter();
+        }
+
+        private void switchToMainMenu() {
+            Launcher launcher = (Launcher) getContext();
+            launcher.switchToMainMenu();
+        }
+
+        private void switchToTasks() {
+            Launcher launcher = (Launcher) getContext();
+            launcher.switchToTasks();
         }
 
         private void drawBottomBar(Canvas canvas) {
@@ -226,19 +242,6 @@ public class Launcher extends Activity {
         }
     }
 
-    private Drawable cachedBackground;
-    private LauncherView launcherView;
-    private AppListView appList;
-    private DialerView dialerView;
-    private Tasks tasks;
-
-    private int clientHeight;
-    private int clientWidth;
-
-    public Drawable getCachedBackground() {
-        return cachedBackground;
-    }
-
     public void switchToHome() {
         setContentView(launcherView);
         launcherView.requestFocus();
@@ -247,26 +250,46 @@ public class Launcher extends Activity {
         launcherView.animate().alpha(1.0f).setDuration(350);
     }
 
-    private void switchToDialer() {
+    public void switchToDialer() {
         setContentView(dialerView);
         dialerView.requestFocus();
         dialerView.setTranslationY(clientHeight);
         dialerView.animate().setDuration(250).translationY(0);
     }
 
-    private void switchToMainMenu() {
+    public void switchToMainMenu() {
         setContentView(appList);
         appList.requestFocus();
         appList.setTranslationY(clientHeight);
         appList.animate().setDuration(250).translationY(0);
     }
 
-    private void switchToTasks() {
+    public void switchToNotificationCenter() {
+        setContentView(notificationCenter);
+        notificationCenter.requestFocus();
+        notificationCenter.setTranslationY(-clientHeight);
+        notificationCenter.animate().setDuration(250).translationY(0);
+    }
+
+    public void switchToCommandCenter() {
+        setContentView(commandCenter);
+        commandCenter.requestFocus();
+        commandCenter.setTranslationY(-clientHeight);
+        commandCenter.animate().setDuration(250).translationY(0);
+    }
+
+    public void switchToTasks() {
         tasks.updateTaskList();
         setContentView(tasks);
         tasks.requestFocus();
         tasks.setTranslationX(clientWidth);
         tasks.animate().setDuration(250).translationX(0);
+    }
+
+    private boolean isRTL() {
+        java.util.Locale locale = getResources().getConfiguration().locale;
+        String language = locale.getLanguage();
+        return language.equals("he") || language.equals("ar") || language.equals("iw");
     }
 
     @Override
@@ -283,12 +306,16 @@ public class Launcher extends Activity {
             startActivity(intent);
         }
 
-        // Initialize views
+        // Initialize ALL views
         dialerView = new DialerView(getApplicationContext());
         tasks = new Tasks(this);
+        notificationCenter = new NotificationCenterView(this);
+        commandCenter = new CommandCenterView(this);
 
         tasks.setFocusable(true);
         dialerView.setFocusable(true);
+        notificationCenter.setFocusable(true);
+        commandCenter.setFocusable(true);
 
         launcherView = new LauncherView(getApplicationContext());
         appList = new AppListView(this);
@@ -317,7 +344,22 @@ public class Launcher extends Activity {
             loadWallpaper();
         }
 
+        // Check notification permission
+        checkNotificationPermission();
+
         switchToHome();
+    }
+
+    private void checkNotificationPermission() {
+        String packageName = getPackageName();
+        String flat = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        
+        if (flat == null || !flat.contains(packageName)) {
+            Intent intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+            startActivity(intent);
+            Toast.makeText(this, isRTL() ? "אנא אפשר גישה להתראות" : "Please enable notification access", 
+                Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
