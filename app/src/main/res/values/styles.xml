@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <!-- Remove focus highlight -->
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
+        <item name="android:selectableItemBackground">@android:color/transparent</item>
+    </style>
+</resources>

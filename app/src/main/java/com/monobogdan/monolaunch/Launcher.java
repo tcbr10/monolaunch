@@ -296,6 +296,31 @@ public class Launcher extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        @Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    
+    // ... existing code ...
+    
+    // Request Bluetooth permissions for Android 12+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN
+            }, 100);
+        }
+    }
+    
+    // Request WRITE_SETTINGS permission for brightness control
+    if (!Settings.System.canWrite(this)) {
+        Toast.makeText(this, "Grant write settings permission for brightness control", Toast.LENGTH_LONG).show();
+    }
+    
+    // ... rest of code ...
+}
+
+
         // Prompt user to grant Usage Access if needed
         AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
         int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,

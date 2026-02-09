@@ -2,9 +2,11 @@ package com.monobogdan.monolaunch;
 
 import android.app.Notification;
 import android.app.PendingIntent;
+import android.app.RemoteInput;
 import android.graphics.drawable.Icon;
-import android.service.notification.StatusBarNotification;
 import android.os.Bundle;
+import android.service.notification.StatusBarNotification;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,11 +27,13 @@ public class NotificationItem {
         public String title;
         public PendingIntent intent;
         public Icon icon;
+        public RemoteInput[] remoteInputs;
 
-        public NotificationAction(String title, PendingIntent intent, Icon icon) {
+        public NotificationAction(String title, PendingIntent intent, Icon icon, RemoteInput[] remoteInputs) {
             this.title = title;
             this.intent = intent;
             this.icon = icon;
+            this.remoteInputs = remoteInputs;
         }
     }
 
@@ -46,21 +50,24 @@ public class NotificationItem {
         Bundle extras = notification.extras;
         if (extras != null) {
             this.title = extras.getString(Notification.EXTRA_TITLE, "");
-            this.text = extras.getCharSequence(Notification.EXTRA_TEXT, "").toString();
+            CharSequence textSeq = extras.getCharSequence(Notification.EXTRA_TEXT);
+            this.text = textSeq != null ? textSeq.toString() : "";
         }
 
         // Extract actions
         this.actions = new ArrayList<>();
         if (notification.actions != null) {
             for (Notification.Action action : notification.actions) {
-                if (action.getRemoteInputs() != null && action.getRemoteInputs().length > 0) {
+                RemoteInput[] remoteInputs = action.getRemoteInputs();
+                if (remoteInputs != null && remoteInputs.length > 0) {
                     this.canReply = true;
                     this.replyIntent = action.actionIntent;
                 }
                 actions.add(new NotificationAction(
                     action.title != null ? action.title.toString() : "",
                     action.actionIntent,
-                    action.getIcon()
+                    action.getIcon(),
+                    remoteInputs
                 ));
             }
         }
