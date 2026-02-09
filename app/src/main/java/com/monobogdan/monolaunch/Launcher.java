@@ -307,7 +307,7 @@ public class Launcher extends Activity {
         }
 
         // Initialize ALL views
-        dialerView = new DialerView(getApplicationContext());
+        dialerView = new DialerView(this);
         tasks = new Tasks(this);
         notificationCenter = new NotificationCenterView(this);
         commandCenter = new CommandCenterView(this);
@@ -317,7 +317,7 @@ public class Launcher extends Activity {
         notificationCenter.setFocusable(true);
         commandCenter.setFocusable(true);
 
-        launcherView = new LauncherView(getApplicationContext());
+        launcherView = new LauncherView(this);  // Use 'this' instead of getApplicationContext()
         appList = new AppListView(this);
         appList.setFocusable(true);
         launcherView.setFocusable(true);
