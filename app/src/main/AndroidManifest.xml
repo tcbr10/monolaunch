@@ -16,22 +16,25 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
         android:label="MonoLauncher"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Holo.NoActionBar"
         android:theme="@style/AppTheme"
         tools:targetApi="31">
+        
         <activity
             android:name=".Launcher"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -40,7 +43,7 @@
             </intent-filter>
         </activity>
 
-         <service
+        <service
             android:name=".NotificationService"
             android:label="MonoLaunch Notifications"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
