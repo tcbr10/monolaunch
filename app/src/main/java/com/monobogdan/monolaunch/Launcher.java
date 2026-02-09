@@ -80,6 +80,10 @@ public class Launcher extends Activity {
         public LauncherView(Context ctx) {
             super(ctx);
 
+            // Disable focus highlight
+            setFocusableInTouchMode(false);
+            setDefaultFocusHighlightEnabled(false);
+
             clockWidget = new ClockWidget(this);
             playerView = new PlayerWidget(this);
 
@@ -235,8 +239,8 @@ public class Launcher extends Activity {
             baseline += statusWidget.draw(canvas, baseline);
             baseline += playerView.draw(canvas, baseline);
 
-            clientWidth = getWindow().getDecorView().getWidth();
-            clientHeight = getWindow().getDecorView().getHeight(); // HACK!!!
+            clientWidth = ((Activity)getContext()).getWindow().getDecorView().getWidth();
+            clientHeight = ((Activity)getContext()).getWindow().getDecorView().getHeight();
 
             drawBottomBar(canvas);
         }
@@ -296,31 +300,6 @@ public class Launcher extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        @Override
-protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    
-    // ... existing code ...
-    
-    // Request Bluetooth permissions for Android 12+
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN
-            }, 100);
-        }
-    }
-    
-    // Request WRITE_SETTINGS permission for brightness control
-    if (!Settings.System.canWrite(this)) {
-        Toast.makeText(this, "Grant write settings permission for brightness control", Toast.LENGTH_LONG).show();
-    }
-    
-    // ... rest of code ...
-}
-
-
         // Prompt user to grant Usage Access if needed
         AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
         int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
@@ -342,7 +321,7 @@ protected void onCreate(Bundle savedInstanceState) {
         notificationCenter.setFocusable(true);
         commandCenter.setFocusable(true);
 
-        launcherView = new LauncherView(this);  // Use 'this' instead of getApplicationContext()
+        launcherView = new LauncherView(this);
         appList = new AppListView(this);
         appList.setFocusable(true);
         launcherView.setFocusable(true);
@@ -367,6 +346,21 @@ protected void onCreate(Bundle savedInstanceState) {
         } else {
             // Android 5.x and below, no runtime permission needed
             loadWallpaper();
+        }
+
+        // Request Bluetooth permissions for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                }, 100);
+            }
+        }
+        
+        // Request WRITE_SETTINGS permission for brightness control
+        if (!Settings.System.canWrite(this)) {
+            Toast.makeText(this, "Grant write settings permission for brightness control", Toast.LENGTH_LONG).show();
         }
 
         // Check notification permission
